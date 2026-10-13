@@ -48,6 +48,7 @@ use "List.oby"
 use "Map.oby"
 use "Pair.oby"
 use "Set.oby"
+use "Json.oby"
 
 // The buffered write to stdout, the one `io` owns; `io::flush` makes it
 // visible immediately. `Terminal::print` is an alias.

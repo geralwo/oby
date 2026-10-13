@@ -447,6 +447,32 @@ the held state, `mouse_dragged` is motion while a button is held, and
 |------------|---------|
 | `rand(int n) -> int` | a pseudo-random value in `0..n-1` (`extern ob_rand`), seeded from the clock |
 
+### `Json.oby`
+
+JSON, backed by the vendored public-domain `json.h` (`vendor/README.md`): one
+native allocation per parsed document, freed with `Json::free`.
+
+| Definition | Meaning |
+|------------|---------|
+| `Json::parse(String) -> Json` | parse a document; `valid()` is 0 when the text is not JSON |
+| `Json::last_error() -> String` | why the last parse failed, with the byte, line and column; `""` after a success |
+| `Json::valid(Json) -> int` | 1 for a real document or value |
+| `Json::kind(Json) -> int` | the `Json::Kind` (`OBJECT`, `ARRAY`, `STRING`, `NUMBER`, `BOOL`, `NULL`, or `NONE` for handle 0) |
+| `Json::len(Json) -> int` | an object's member count or an array's element count |
+| `Json::key_at(Json, int) -> String` | a member's name by position |
+| `Json::at(Json, int) -> Json` | an array element (or an object's value) by position |
+| `Json::get(Json, String) -> Json` | a member by name; handle 0 when there is none |
+| `Json::as_string(Json) -> String` | a string's bytes, a number's text, `"true"`/`"false"`; else `""` |
+| `Json::as_int(Json) -> int64` | a number truncated toward zero; 0 out of range or for anything else |
+| `Json::as_float(Json) -> float` | a number, else 0.0 |
+| `Json::as_bool(Json) -> int` | 1 for `true`, else 0 |
+| `Json::to_minified(Json) -> String` | the document (or the value) as compact JSON |
+| `Json::to_pretty(Json) -> String` | the same, one field per line, indented with tabs |
+| `Json::free(Json)` | give the allocation back |
+
+A JSON `null` is a real value — its kind is `Json::Kind::NULL` — distinct from
+a missing member, which is handle 0 (`Json::Kind::NONE`).
+
 ## The natives behind the prelude
 
 | C symbol | Signature | Defined in |
@@ -508,6 +534,19 @@ the held state, `mouse_dragged` is motion while a button is held, and
 | `input_mouse_x`, `input_mouse_y` | `() -> int` | `src/native/input.c` |
 | `input_mouse_clicked`, `input_mouse_released`, `input_mouse_down` | `(int button) -> int` | `src/native/input.c` |
 | `input_mouse_dragged`, `input_mouse_wheel` | `() -> int` | `src/native/input.c` |
+| `json_parse` | `(String text) -> int64` | `src/native/json.c` |
+| `json_free` | `(int64 handle) -> void` | `src/native/json.c` |
+| `json_kind`, `json_len` | `(int64 handle) -> int` | `src/native/json.c` |
+| `json_key_at` | `(int64 handle, int index) -> String` | `src/native/json.c` |
+| `json_at` | `(int64 handle, int index) -> int64` | `src/native/json.c` |
+| `json_get` | `(int64 handle, String key) -> int64` | `src/native/json.c` |
+| `json_as_string` | `(int64 handle) -> String` | `src/native/json.c` |
+| `json_as_int` | `(int64 handle) -> int64` | `src/native/json.c` |
+| `json_as_float` | `(int64 handle) -> float` | `src/native/json.c` |
+| `json_as_bool` | `(int64 handle) -> int` | `src/native/json.c` |
+| `json_to_minified` | `(int64 handle) -> String` | `src/native/json.c` |
+| `json_to_pretty` | `(int64 handle, String indent, String newline) -> String` | `src/native/json.c` |
+| `json_error` | `() -> String` | `src/native/json.c` |
 | `ob_rand` | `(int) -> int` | `src/native/random.c` |
 
 `to_str` and `str_concat` are not declared in the prelude: the compiler emits

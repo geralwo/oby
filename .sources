@@ -31,6 +31,7 @@ src/native/terminal.c
 src/native/input.c
 src/native/random.c
 src/native/time.c
+src/native/json.c
 src/vm/function.c
 src/vm/image.c
 src/vm/vm.c

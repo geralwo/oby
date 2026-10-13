@@ -1,0 +1,26 @@
+// JSON: parsing, reading members, writing back, and the error message.
+
+doc = Json::parse("{\"name\":\"oby\",\"n\":3,\"f\":2.5,\"ok\":true,\"nil\":null,\"xs\":[1,2,3]}")
+print("valid: ${Json::valid(doc)}\n")
+print("kind: ${Json::kind(doc)}\n")
+print("len: ${Json::len(doc)}\n")
+print("name: ${Json::as_string(Json::get(doc, "name"))}\n")
+print("n: ${Json::as_int(Json::get(doc, "n"))}\n")
+print("f: ${Json::as_float(Json::get(doc, "f"))}\n")
+print("ok: ${Json::as_bool(Json::get(doc, "ok"))}\n")
+print("nil kind: ${Json::kind(Json::get(doc, "nil"))}\n")
+print("missing valid: ${Json::valid(Json::get(doc, "nope"))}\n")
+print("key at 2: ${Json::key_at(doc, 2)}\n")
+
+xs = Json::get(doc, "xs")
+print("xs len: ${Json::len(xs)}\n")
+print("xs[1]: ${Json::as_int(Json::at(xs, 1))}\n")
+print("xs min: ${Json::to_minified(xs)}\n")
+print("xs pretty:\n${Json::to_pretty(xs)}\n")
+
+bad = Json::parse("{\"a\": [1, 2,]}")
+print("bad valid: ${Json::valid(bad)}\n")
+print("bad error: ${Json::last_error()}\n")
+
+Json::free(doc)
+print("freed\n")

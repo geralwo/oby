@@ -4,7 +4,7 @@ set -euo pipefail
 
 PRELUDE_DIR="src/prelude"
 
-CFLAGS="-std=c11 -Wall -Wextra -Werror -pedantic -Iinclude -O2 -DOBY_PRELUDE_DIR=\"$PRELUDE_DIR\""
+CFLAGS="-std=c11 -Wall -Wextra -Werror -pedantic -Iinclude -Ivendor -O2 -DOBY_PRELUDE_DIR=\"$PRELUDE_DIR\""
 
 BINARY_NAME="oby"
 BUILD_DIR="build"

@@ -1134,6 +1134,13 @@ The rest of the prelude (see `prelude.md`):
   `Pair<A, B>`. They are ordinary generic types written in OBY — a script's own
   have the same power — and their names are the prelude's, so a script cannot
   declare its own `List`/`Map`/`Set`/`Pair`.
+- `Json.oby` — JSON: `Json::parse` a document into a handle (`Json::last_error`
+  says why when the text is not JSON), walk it with `kind`/`len`/`key_at`/
+  `at`/`get` and the `as_string`/`as_int`/`as_float`/`as_bool` readers, write it
+  back with `to_minified`/`to_pretty`, and `Json::free` the allocation when
+  done. A JSON `null` is a real value (`kind` is `Json::Kind::NULL`), distinct
+  from a missing member (handle 0, `Json::Kind::NONE`). Backed by the vendored
+  public-domain `json.h` (see `vendor/README.md`).
 
 ## 12. Standalone executables
 

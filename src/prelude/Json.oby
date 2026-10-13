@@ -1,0 +1,114 @@
+// JSON documents, backed by the vendored json.h (public domain — see
+// vendor/README.md). A handle is one native allocation; `Json::free` gives it
+// back.
+//
+// The natives sit at the top level as `json_*`; call the `Json::` methods
+// instead.
+
+json_parse = extern json_parse(String text) -> int64
+json_free = extern json_free(int64 handle) -> void
+json_kind = extern json_kind(int64 handle) -> int
+json_len = extern json_len(int64 handle) -> int
+json_key_at = extern json_key_at(int64 handle, int index) -> String
+json_at = extern json_at(int64 handle, int index) -> int64
+json_get = extern json_get(int64 handle, String key) -> int64
+json_as_string = extern json_as_string(int64 handle) -> String
+json_as_int = extern json_as_int(int64 handle) -> int64
+json_as_float = extern json_as_float(int64 handle) -> float
+json_as_bool = extern json_as_bool(int64 handle) -> int
+json_to_minified = extern json_to_minified(int64 handle) -> String
+json_to_pretty = extern json_to_pretty(int64 handle, String indent, String newline) -> String
+json_error = extern json_error() -> String
+
+// A parsed document, or a value inside one. The handle is 0 for "nothing":
+// `Json::parse` returns that when the text is not JSON, and `get`/`at` when
+// there is no such member. A JSON `null` is a real value with a real handle —
+// its kind is `Json::Kind::NULL`, distinct from `NONE`.
+Json = type {
+	handle = int64(0)
+}
+
+// The kinds `kind` reports.
+Json::Kind = enum {
+	NONE = 0
+	OBJECT = 1
+	ARRAY = 2
+	STRING = 3
+	NUMBER = 4
+	BOOL = 5
+	NULL = 6
+}
+
+// Parse `text`. A failed parse gives a Json that `valid` rejects;
+// `Json::last_error` explains why.
+Json::parse = (String text) -> Json {
+	return { handle = json_parse(text) }
+}
+
+Json::valid = (Json j) -> int {
+	return j.handle != 0
+}
+
+Json::kind = (Json j) -> int {
+	return json_kind(j.handle)
+}
+
+// An object's member count, or an array's element count.
+Json::len = (Json j) -> int {
+	return json_len(j.handle)
+}
+
+// An object's key, or its value, by position — for iterating either.
+Json::key_at = (Json j, int index) -> String {
+	return json_key_at(j.handle, index)
+}
+
+Json::at = (Json j, int index) -> Json {
+	return { handle = json_at(j.handle, index) }
+}
+
+// A member by name; a handle-0 Json when there is no such member.
+Json::get = (Json j, String key) -> Json {
+	return { handle = json_get(j.handle, key) }
+}
+
+// A string's bytes, a number's text, `"true"`/`"false"`; `""` otherwise.
+Json::as_string = (Json j) -> String {
+	return json_as_string(j.handle)
+}
+
+// A number truncated toward zero; 0 for anything else, or out of int64 range.
+Json::as_int = (Json j) -> int64 {
+	return json_as_int(j.handle)
+}
+
+Json::as_float = (Json j) -> float {
+	return json_as_float(j.handle)
+}
+
+// 1 for `true`, 0 for everything else.
+Json::as_bool = (Json j) -> int {
+	return json_as_bool(j.handle)
+}
+
+// The document (or the value) as compact JSON.
+Json::to_minified = (Json j) -> String {
+	return json_to_minified(j.handle)
+}
+
+// The same, one field per line, indented with tabs.
+Json::to_pretty = (Json j) -> String {
+	return json_to_pretty(j.handle, "\t", "\n")
+}
+
+// Why the last failed parse failed, including the byte, line, and column; ""
+// when it did not.
+Json::last_error = () -> String {
+	return json_error()
+}
+
+// Give the allocation back. The document and everything taken from it become
+// invalid; freeing a handle-0 Json is fine.
+Json::free = (Json j) -> void {
+	json_free(j.handle)
+}

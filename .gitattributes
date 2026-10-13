@@ -3,3 +3,7 @@
 # "clean" for git on Windows and for git under WSL alike, and the toolchain
 # tolerates either form (the lexer skips \r; the test harness folds CRLF).
 * text=auto
+
+# Vendored code is kept byte-exact: vendor/README.md records a sha256, and a
+# checkout must not rewrite the bytes it pins.
+vendor/** -text

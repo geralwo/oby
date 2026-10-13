@@ -8,6 +8,7 @@
 #include "native/input.h"
 #include "native/random.h"
 #include "native/time.h"
+#include "native/json.h"
 #include "core/numbers.h"
 #include "core/array.h"
 
@@ -69,6 +70,7 @@ void native_register_std(void) {
     input_register_natives();
     random_register_natives();
     time_register_natives();
+    json_register_natives();
 }
 
 uint64_t native_fingerprint(void) {
