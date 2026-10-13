@@ -42,6 +42,12 @@ static bool number_text(const struct json_number_s *number, char *buf, size_t ca
     return true;
 }
 
+/* The writers count their terminating NUL in `*out_size`; a String wants the
+   bytes without it. */
+static size_t text_length(const char *text, size_t length) {
+    return (length > 0 && text[length - 1] == '\0') ? length - 1 : length;
+}
+
 /* json_parse(String text) -> int64 : the document handle, or 0 when the text
    is not JSON (`json_error` explains). */
 static Value nat_json_parse(Value *args, int argc) {
@@ -205,7 +211,7 @@ static Value nat_json_to_minified(Value *args, int argc) {
     size_t length = 0;
     char *text = (char *)json_write_minified(value, &length);
     if (!text) return val_null();
-    Value result = string_value(text, length);
+    Value result = string_value(text, text_length(text, length));
     free(text);
     return result;
 }
@@ -225,7 +231,7 @@ static Value nat_json_to_pretty(Value *args, int argc) {
                                            newline && newline->data ? newline->data : "\n",
                                            &length);
     if (!text) return val_null();
-    Value result = string_value(text, length);
+    Value result = string_value(text, text_length(text, length));
     free(text);
     return result;
 }

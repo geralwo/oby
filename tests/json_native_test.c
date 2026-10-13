@@ -106,10 +106,15 @@ int main(void) {
     check("an array's element count", call1(len, xs).as.i, 2);
     check("at reads an element", call1(as_int, call2(at, xs, val_int(1))).as.i, 20);
     check("at out of range is handle 0", call2(at, xs, val_int(9)).as.i, 0);
+    Value xs_min = call1(minified, xs);
     check("a value minifies",
-          (long long)(strcmp(text_of(call1(minified, xs)), "[10,20]") == 0), 1);
+          (long long)(strcmp(text_of(xs_min), "[10,20]") == 0), 1);
+    check("... with an exact length", (long long)xs_min.as.str->length, 7);
+    Value xs_pretty = call1(pretty, xs);
     check("pretty output is multi-line",
-          (long long)(strchr(text_of(call1(pretty, xs)), '\n') != NULL), 1);
+          (long long)(strchr(text_of(xs_pretty), '\n') != NULL), 1);
+    check("... and carries no terminator",
+          (long long)(xs_pretty.as.str->length == strlen(text_of(xs_pretty))), 1);
 
     /* A failed parse: handle 0, and the error names the place. */
     Value bad = call1(parse, str_value("{\"a\": [1, 2,]}"));
