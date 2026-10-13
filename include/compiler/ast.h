@@ -22,6 +22,7 @@ typedef struct {
     const char *name;
     struct ASTNode *value;  /* explicit value expression, or NULL */
     long auto_value;        /* resolved value when `value` is NULL */
+    Token tok;              /* the constant's name token, for tooling */
 } EnumItem;
 
 typedef enum {

@@ -35,8 +35,7 @@ static void print_usage(const char *prog) {
     printf("  -printast      print the parsed and typed AST\n");
     printf("  --lsp          run as a language server, speaking LSP on stdio\n");
     printf("  --bundle <script.oby> <output>\n");
-    printf("                 write <output> as a standalone executable: this binary\n");
-    printf("                 plus the compiled program (no files, no toolchain)\n");
+    printf("                 create a standalone executable <output>\n");
     printf("  -h, --help     show this help\n");
     printf("  -v, --version  show the version\n");
 }

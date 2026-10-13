@@ -113,6 +113,8 @@ int main(void) {
     snprintf(init_expected, sizeof init_expected,
              "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"capabilities\":{"
              "\"textDocumentSync\":1,\"hoverProvider\":true,\"definitionProvider\":true,"
+             "\"completionProvider\":{\"triggerCharacters\":[\".\",\":\"]},"
+             "\"documentSymbolProvider\":true,"
              "\"positionEncoding\":\"utf-16\"},"
              "\"serverInfo\":{\"name\":\"oby\",\"version\":\"%s\"}}}",
              oby_version_str);
@@ -250,6 +252,152 @@ int main(void) {
                      "hover over punctuation is null");
         expect_frame(frames, 7, "{\"jsonrpc\":\"2.0\",\"id\":10,\"result\":null}",
                      "shutdown responds null");
+        free_frames(frames);
+        free(s.data);
+    }
+
+    /* ---- completion: a bare name ---- */
+    {
+        Session s = {0};
+        session_add(&s, init_request);
+        session_add(&s, "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didOpen\",\"params\":"
+                        "{\"textDocument\":{\"uri\":\"file:///tmp/c.oby\",\"languageId\":\"oby\","
+                        "\"version\":1,\"text\":\"alpha = 1\\nbeta = 2\\nal\\n\"}}}");
+        session_add(&s, "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"textDocument/completion\","
+                        "\"params\":{\"textDocument\":{\"uri\":\"file:///tmp/c.oby\"},"
+                        "\"position\":{\"line\":2,\"character\":2}}}");
+        session_add(&s, "{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"shutdown\"}");
+        session_add(&s, "{\"jsonrpc\":\"2.0\",\"method\":\"exit\"}");
+
+        Array *frames;
+        int status = run_session(&s, &frames);
+        check(status == 0, "the completion session shuts down cleanly");
+        check(array_length(frames) == 4, "one frame per request");
+        expect_contains(frames, 1, "unknown name 'al'", "the incomplete name is diagnosed");
+        expect_frame(frames, 2,
+                     "{\"jsonrpc\":\"2.0\",\"id\":5,\"result\":[{\"label\":\"alpha\",\"kind\":6}]}",
+                     "the prefix filters the candidates");
+        free_frames(frames);
+        free(s.data);
+    }
+
+    /* ---- completion: after a `.` (the receiver is an array) ---- */
+    {
+        Session s = {0};
+        session_add(&s, init_request);
+        session_add(&s, "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didOpen\",\"params\":"
+                        "{\"textDocument\":{\"uri\":\"file:///tmp/c2.oby\",\"languageId\":\"oby\","
+                        "\"version\":1,\"text\":\"xs = [1, 2]\\nxs.\\n\"}}}");
+        session_add(&s, "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"textDocument/completion\","
+                        "\"params\":{\"textDocument\":{\"uri\":\"file:///tmp/c2.oby\"},"
+                        "\"position\":{\"line\":1,\"character\":3}}}");
+        session_add(&s, "{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"shutdown\"}");
+        session_add(&s, "{\"jsonrpc\":\"2.0\",\"method\":\"exit\"}");
+
+        Array *frames;
+        int status = run_session(&s, &frames);
+        check(status == 0, "the member session shuts down cleanly");
+        check(array_length(frames) == 4, "one frame per request");
+        expect_frame(frames, 2,
+                     "{\"jsonrpc\":\"2.0\",\"id\":5,\"result\":["
+                     "{\"label\":\"insert\",\"kind\":2},"
+                     "{\"label\":\"pop\",\"kind\":2},"
+                     "{\"label\":\"push\",\"kind\":2},"
+                     "{\"label\":\"remove\",\"kind\":2}]}",
+                     "an array receiver offers the intrinsics");
+        free_frames(frames);
+        free(s.data);
+    }
+
+    /* ---- completion: after `::` (an enum's constants) ---- */
+    {
+        Session s = {0};
+        session_add(&s, init_request);
+        session_add(&s, "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didOpen\",\"params\":"
+                        "{\"textDocument\":{\"uri\":\"file:///tmp/c3.oby\",\"languageId\":\"oby\","
+                        "\"version\":1,\"text\":\"Color = enum {\\n\\tRED = 1\\n\\tGREEN = 2\\n}\\nColor::\\n\"}}}");
+        session_add(&s, "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"textDocument/completion\","
+                        "\"params\":{\"textDocument\":{\"uri\":\"file:///tmp/c3.oby\"},"
+                        "\"position\":{\"line\":4,\"character\":7}}}");
+        session_add(&s, "{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"shutdown\"}");
+        session_add(&s, "{\"jsonrpc\":\"2.0\",\"method\":\"exit\"}");
+
+        Array *frames;
+        int status = run_session(&s, &frames);
+        check(status == 0, "the static session shuts down cleanly");
+        check(array_length(frames) == 4, "one frame per request");
+        expect_frame(frames, 2,
+                     "{\"jsonrpc\":\"2.0\",\"id\":5,\"result\":["
+                     "{\"label\":\"GREEN\",\"kind\":20},"
+                     "{\"label\":\"RED\",\"kind\":20}]}",
+                     "an enum's constants are its statics");
+        free_frames(frames);
+        free(s.data);
+    }
+
+    /* ---- document symbols: the flat shape ---- */
+    {
+        Session s = {0};
+        const char *publish_clean_s =
+            "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/publishDiagnostics\","
+            "\"params\":{\"uri\":\"file:///tmp/s.oby\",\"diagnostics\":[]}}";
+        session_add(&s, init_request);
+        session_add(&s, "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didOpen\",\"params\":"
+                        "{\"textDocument\":{\"uri\":\"file:///tmp/s.oby\",\"languageId\":\"oby\","
+                        "\"version\":1,\"text\":\"f = (int a) -> int {\\n\\treturn a\\n}\\ny = 1\\n\"}}}");
+        session_add(&s, "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"textDocument/documentSymbol\","
+                        "\"params\":{\"textDocument\":{\"uri\":\"file:///tmp/s.oby\"}}}");
+        session_add(&s, "{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"shutdown\"}");
+        session_add(&s, "{\"jsonrpc\":\"2.0\",\"method\":\"exit\"}");
+
+        Array *frames;
+        int status = run_session(&s, &frames);
+        check(status == 0, "the outline session shuts down cleanly");
+        check(array_length(frames) == 4, "one frame per request");
+        expect_frame(frames, 1, publish_clean_s, "the outline document is clean");
+        expect_frame(frames, 2,
+                     "{\"jsonrpc\":\"2.0\",\"id\":5,\"result\":["
+                     "{\"name\":\"f\",\"kind\":12,\"location\":{\"uri\":\"file:///tmp/s.oby\","
+                     "\"range\":{\"start\":{\"line\":0,\"character\":0},"
+                     "\"end\":{\"line\":0,\"character\":1}}}},"
+                     "{\"name\":\"y\",\"kind\":13,\"location\":{\"uri\":\"file:///tmp/s.oby\","
+                     "\"range\":{\"start\":{\"line\":3,\"character\":0},"
+                     "\"end\":{\"line\":3,\"character\":1}}}}]}",
+                     "a flat outline without the hierarchy capability");
+        free_frames(frames);
+        free(s.data);
+    }
+
+    /* ---- document symbols: the hierarchical shape, with members ---- */
+    {
+        Session s = {0};
+        session_add(&s, "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":"
+                        "{\"capabilities\":{\"textDocument\":{\"documentSymbol\":"
+                        "{\"hierarchicalDocumentSymbolSupport\":true}}}}}");
+        session_add(&s, "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didOpen\",\"params\":"
+                        "{\"textDocument\":{\"uri\":\"file:///tmp/h.oby\",\"languageId\":\"oby\","
+                        "\"version\":1,\"text\":\"Point = type {\\n\\tx = 0\\n\\t::count = 3\\n\\tget = () -> int { return x }\\n}\\n\"}}}");
+        session_add(&s, "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"textDocument/documentSymbol\","
+                        "\"params\":{\"textDocument\":{\"uri\":\"file:///tmp/h.oby\"}}}");
+        session_add(&s, "{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"shutdown\"}");
+        session_add(&s, "{\"jsonrpc\":\"2.0\",\"method\":\"exit\"}");
+
+        Array *frames;
+        int status = run_session(&s, &frames);
+        check(status == 0, "the hierarchical session shuts down cleanly");
+        check(array_length(frames) == 4, "one frame per request");
+        const char *body = frame_at(frames, 2);
+        check(body && strstr(body, "\"name\":\"Point\",\"kind\":5") != NULL,
+              "the type is a class");
+        check(body && strstr(body, "\"children\":[{\"name\":\"x\",\"kind\":8") != NULL,
+              "the fields are children");
+        check(body && strstr(body, "{\"name\":\"count\",\"kind\":8") != NULL,
+              "a static member is listed");
+        check(body && strstr(body, "{\"name\":\"get\",\"kind\":6") != NULL,
+              "a method is a method");
+        check(body && strstr(body, "\"selectionRange\":{\"start\":{\"line\":3,\"character\":1},"
+                                   "\"end\":{\"line\":3,\"character\":4}}") != NULL,
+              "the method's selection covers its name");
         free_frames(frames);
         free(s.data);
     }

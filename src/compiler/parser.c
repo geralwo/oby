@@ -1121,6 +1121,7 @@ static ASTNode *parse_stmt(Parser *p) {
                 item.name = strndup(name.start, name.length);
                 item.value = NULL;
                 item.auto_value = 0;
+                item.tok = name;
                 if (match(p, TOKEN_EQUAL)) {
                     item.value = parse_expr(p);
                 }

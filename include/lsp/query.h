@@ -56,4 +56,29 @@ bool lsp_target_decl_token(const LspTarget *target, Token *out);
    test that keeps a definition from jumping into another file. */
 bool lsp_token_in_source(const char *source, size_t source_len, Token tok);
 
+/* What the text just before the cursor asks to complete. */
+typedef enum {
+    LSP_COMPLETE_NAME,     /* a bare identifier: keywords, types, values */
+    LSP_COMPLETE_MEMBER,   /* `expr.` — the expression's members */
+    LSP_COMPLETE_STATIC    /* `Type::` — the type's statics */
+} LspCompletionKind;
+
+typedef struct {
+    LspCompletionKind kind;
+    char prefix[64];       /* the partial identifier being typed (possibly empty) */
+    size_t prefix_len;
+    size_t receiver_end;   /* where the receiver's text ends (the `.`/`::` offset) */
+    char receiver[128];    /* the name before the `.`/`::` (possibly empty) */
+    size_t receiver_len;
+} LspCompletion;
+
+/* Read the text before `offset` and decide what is being completed. */
+LspCompletion lsp_completion_at(const char *source, size_t source_len, size_t offset);
+
+/* The bindings a bare name at `offset` can mean beyond the globals: the
+   enclosing function's parameters and the binds written before the cursor (or
+   the top-level binds before it). Appends `Symbol*`, in declaration order. */
+void lsp_visible_bindings(ASTNode *program, const char *source, size_t source_len,
+                          size_t offset, Array *out);
+
 #endif // OBY_LSP_QUERY_H

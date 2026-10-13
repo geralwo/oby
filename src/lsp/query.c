@@ -357,3 +357,301 @@ bool lsp_target_decl_token(const LspTarget *target, Token *out) {
     }
     return false;
 }
+
+/* ------------------------------------------------------------------ */
+/* Walking the tree for completion                                    */
+/* ------------------------------------------------------------------ */
+
+/* Call `visit` for every direct child node of `node` — the same shape `scan`
+   walks in its own switch; keep the two in step. */
+static void for_each_child(ASTNode *node, void *ctx, void (*visit)(ASTNode *, void *));
+
+static void visit_list(Array *list, void *ctx, void (*visit)(ASTNode *, void *)) {
+    if (!list) return;
+    for (size_t i = 0; i < array_length(list); i++) {
+        visit(*(ASTNode **)array_get(list, i), ctx);
+    }
+}
+
+static void for_each_child(ASTNode *node, void *ctx, void (*visit)(ASTNode *, void *)) {
+    switch (node->kind) {
+        case AST_PROGRAM: visit_list(node->as.program.stmts, ctx, visit); return;
+        case AST_BLOCK:   visit_list(node->as.block.stmts, ctx, visit); return;
+        case AST_BIND:
+            visit(node->as.bind.type, ctx);
+            visit(node->as.bind.value, ctx);
+            return;
+        case AST_ASSIGN:
+            visit(node->as.assign.target, ctx);
+            visit(node->as.assign.value, ctx);
+            return;
+        case AST_COMPOUND_ASSIGN:
+            visit(node->as.compound.target, ctx);
+            visit(node->as.compound.value, ctx);
+            return;
+        case AST_MEMBER_ASSIGN:
+            visit(node->as.member_assign.target, ctx);
+            visit(node->as.member_assign.value, ctx);
+            return;
+        case AST_MEMBER_ACCESS:
+            visit(node->as.member_access.object, ctx);
+            return;
+        case AST_CALL:
+            visit(node->as.call.callee, ctx);
+            visit_list(node->as.call.args, ctx, visit);
+            return;
+        case AST_INDEX:
+            visit(node->as.index.target, ctx);
+            visit(node->as.index.index, ctx);
+            return;
+        case AST_TABLE_LITERAL:
+            visit_list(node->as.table.fields, ctx, visit);
+            return;
+        case AST_ARRAY_LITERAL:
+            visit_list(node->as.array.elements, ctx, visit);
+            visit(node->as.array.repeat, ctx);
+            visit(node->as.array.count_expr, ctx);
+            return;
+        case AST_INTERPOLATED_STRING:
+            visit_list(node->as.interpolated.parts, ctx, visit);
+            return;
+        case AST_BINARY_EXPR:
+            visit(node->as.binary.left, ctx);
+            visit(node->as.binary.right, ctx);
+            return;
+        case AST_UNARY_EXPR:
+            visit(node->as.unary.operand, ctx);
+            return;
+        case AST_RETURN:
+            visit(node->as.ret.value, ctx);
+            return;
+        case AST_IF:
+            visit(node->as.if_stmt.cond, ctx);
+            visit(node->as.if_stmt.then_branch, ctx);
+            visit(node->as.if_stmt.else_branch, ctx);
+            return;
+        case AST_WHILE:
+            visit(node->as.while_stmt.cond, ctx);
+            visit(node->as.while_stmt.body, ctx);
+            return;
+        case AST_FOR:
+            visit(node->as.for_stmt.init, ctx);
+            visit(node->as.for_stmt.cond, ctx);
+            visit(node->as.for_stmt.step, ctx);
+            visit(node->as.for_stmt.body, ctx);
+            return;
+        case AST_SWITCH:
+            visit(node->as.switch_stmt.expr, ctx);
+            visit_list(node->as.switch_stmt.cases, ctx, visit);
+            visit(node->as.switch_stmt.default_body, ctx);
+            return;
+        case AST_CASE:
+            visit(node->as.case_stmt.value, ctx);
+            visit(node->as.case_stmt.range_hi, ctx);
+            visit(node->as.case_stmt.guard, ctx);
+            visit(node->as.case_stmt.body, ctx);
+            return;
+        case AST_FUNC_LITERAL:
+            visit_list(node->as.func.params, ctx, visit);
+            visit(node->as.func.ret_type, ctx);
+            visit(node->as.func.body, ctx);
+            return;
+        case AST_EXTERN_DEF:
+            visit_list(node->as.extern_def.params, ctx, visit);
+            visit(node->as.extern_def.ret_type, ctx);
+            return;
+        case AST_PARAM:
+            visit(node->as.param.type, ctx);
+            return;
+        case AST_PACKED_DEF:
+            visit(node->as.packed_def.target, ctx);
+            visit(node->as.packed_def.element, ctx);
+            visit(node->as.packed_def.body, ctx);
+            return;
+        case AST_TYPE_DEF:
+            visit(node->as.type_def.target, ctx);
+            visit(node->as.type_def.body, ctx);
+            return;
+        case AST_TYPE_ALIAS:
+            visit(node->as.type_alias.type, ctx);
+            return;
+        case AST_ENUM_DEF:
+            visit(node->as.enum_def.target, ctx);
+            if (node->as.enum_def.items) {
+                for (size_t i = 0; i < array_length(node->as.enum_def.items); i++) {
+                    EnumItem *item = (EnumItem *)array_get(node->as.enum_def.items, i);
+                    visit(item->value, ctx);
+                }
+            }
+            return;
+        case AST_ARRAY_TYPE:
+            visit(node->as.array_type.element, ctx);
+            return;
+        case AST_FUNC_TYPE:
+            visit_list(node->as.func_type.params, ctx, visit);
+            visit(node->as.func_type.ret, ctx);
+            return;
+        case AST_LITERAL:
+        case AST_PATH:
+        case AST_NULL:
+        case AST_USE:
+        case AST_BREAK:
+        case AST_CONTINUE:
+            return;
+    }
+}
+
+/* Does any token in this subtree cover `offset`? */
+typedef struct {
+    const char *source;
+    size_t source_len;
+    size_t offset;
+    bool found;
+} CoverWalk;
+
+static bool subtree_covers(ASTNode *node, const char *source, size_t source_len,
+                           size_t offset);
+
+static void cover_visit(ASTNode *child, void *raw) {
+    CoverWalk *w = (CoverWalk *)raw;
+    if (!w->found && subtree_covers(child, w->source, w->source_len, w->offset))
+        w->found = true;
+}
+
+static bool subtree_covers(ASTNode *node, const char *source, size_t source_len,
+                           size_t offset) {
+    if (!node) return false;
+    if (token_hits(node->token, source, source_len, offset)) return true;
+    if (node->kind == AST_PATH) {
+        Array *parts = node->as.path.parts;
+        for (size_t i = 0; parts && i < array_length(parts); i++) {
+            PathSegment *seg = (PathSegment *)array_get(parts, i);
+            if (token_hits(seg->tok, source, source_len, offset)) return true;
+        }
+    } else if (node->kind == AST_MEMBER_ACCESS) {
+        if (token_hits(node->as.member_access.member_tok, source, source_len, offset))
+            return true;
+    } else if (node->kind == AST_MEMBER_ASSIGN) {
+        if (token_hits(node->as.member_assign.member_tok, source, source_len, offset))
+            return true;
+    }
+    CoverWalk w = { source, source_len, offset, false };
+    for_each_child(node, &w, cover_visit);
+    return w.found;
+}
+
+/* The innermost function literal containing `offset`, or NULL at the top
+   level. */
+typedef struct {
+    const char *source;
+    size_t source_len;
+    size_t offset;
+    ASTNode *best;
+} FunctionWalk;
+
+static void find_function(ASTNode *node, void *raw);
+
+static void function_child(ASTNode *child, void *raw) {
+    find_function(child, raw);
+}
+
+static void find_function(ASTNode *node, void *raw) {
+    FunctionWalk *w = (FunctionWalk *)raw;
+    if (!node || !subtree_covers(node, w->source, w->source_len, w->offset)) return;
+    if (node->kind == AST_FUNC_LITERAL) w->best = node;
+    for_each_child(node, w, function_child);
+}
+
+/* The binds written before the cursor — without descending into nested
+   functions or type bodies (their names are not locals here). */
+typedef struct {
+    const char *source;
+    size_t source_len;
+    size_t offset;
+    Array *out;   /* Symbol* */
+} BindWalk;
+
+static void collect_binds(ASTNode *node, void *raw);
+
+static void bind_child(ASTNode *child, void *raw) {
+    collect_binds(child, raw);
+}
+
+static void collect_binds(ASTNode *node, void *raw) {
+    BindWalk *w = (BindWalk *)raw;
+    if (!node) return;
+    if (node->kind == AST_FUNC_LITERAL || node->kind == AST_TYPE_DEF ||
+        node->kind == AST_PACKED_DEF || node->kind == AST_ENUM_DEF)
+        return;
+    if (node->kind == AST_BIND && node->sym) {
+        size_t start = 0;
+        if (token_in_buffer(w->source, w->source_len, node->token, &start) &&
+            start < w->offset)
+            array_push(w->out, &node->sym);
+    }
+    for_each_child(node, w, bind_child);
+}
+
+void lsp_visible_bindings(ASTNode *program, const char *source, size_t source_len,
+                          size_t offset, Array *out) {
+    FunctionWalk fw = { source, source_len, offset, NULL };
+    find_function(program, &fw);
+
+    if (fw.best) {
+        Array *params = fw.best->as.func.params;
+        for (size_t i = 0; params && i < array_length(params); i++) {
+            ASTNode *param = *(ASTNode **)array_get(params, i);
+            if (param && param->sym) array_push(out, &param->sym);
+        }
+        BindWalk bw = { source, source_len, offset, out };
+        collect_binds(fw.best->as.func.body, &bw);
+    } else {
+        BindWalk bw = { source, source_len, offset, out };
+        collect_binds(program, &bw);
+    }
+}
+
+/* An identifier byte: the characters a completion prefix may hold. */
+static bool is_ident_char(char c) {
+    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+           (c >= '0' && c <= '9') || c == '_';
+}
+
+LspCompletion lsp_completion_at(const char *source, size_t source_len, size_t offset) {
+    LspCompletion c;
+    memset(&c, 0, sizeof c);
+    c.kind = LSP_COMPLETE_NAME;
+    if (offset > source_len) offset = source_len;
+
+    /* The partial identifier right before the cursor. */
+    size_t start = offset;
+    while (start > 0 && is_ident_char(source[start - 1])) start--;
+    size_t plen = offset - start;
+    if (plen > sizeof c.prefix - 1) plen = sizeof c.prefix - 1;
+    memcpy(c.prefix, source + start, plen);
+    c.prefix[plen] = '\0';
+    c.prefix_len = plen;
+
+    /* What precedes it: `.`, `::`, or nothing. */
+    size_t at = start;   /* where the receiver's text ends */
+    if (start >= 1 && source[start - 1] == '.') {
+        c.kind = LSP_COMPLETE_MEMBER;
+        c.receiver_end = start - 1;
+        at = start - 1;
+    } else if (start >= 2 && source[start - 1] == ':' && source[start - 2] == ':') {
+        c.kind = LSP_COMPLETE_STATIC;
+        c.receiver_end = start - 2;
+        at = start - 2;
+    } else {
+        return c;
+    }
+
+    size_t rstart = at;
+    while (rstart > 0 && is_ident_char(source[rstart - 1])) rstart--;
+    size_t rlen = at - rstart;
+    if (rlen > sizeof c.receiver - 1) rlen = sizeof c.receiver - 1;
+    memcpy(c.receiver, source + rstart, rlen);
+    c.receiver[rlen] = '\0';
+    c.receiver_len = rlen;
+    return c;
+}

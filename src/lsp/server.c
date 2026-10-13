@@ -30,6 +30,7 @@ typedef struct {
     FILE *out;
     bool initialized;
     bool shutdown_received;
+    bool hierarchical_symbols;   /* the client's documentSymbol shape */
     const char *encoding;   /* the negotiated position encoding, §4.1 */
     LspDocument *docs;
 } LspServer;
@@ -272,16 +273,22 @@ static void handle_initialize(LspServer *s, const char *id, size_t id_len,
             if (name && strcmp(name, "utf-16") == 0) break;   /* the default */
         }
     }
+    /* The documentSymbol shape depends on what the client can take. */
+    const JsonValue *text_caps = json_get(capabilities, "textDocument");
+    const JsonValue *ds_caps = json_get(text_caps, "documentSymbol");
+    const JsonValue *hier = json_get(ds_caps, "hierarchicalDocumentSymbolSupport");
+    if (hier && hier->kind == JSON_BOOL) s->hierarchical_symbols = hier->boolean;
+
     s->encoding = encoding;
     s->initialized = true;
 
-    /* The providers grow as the phases land: completion and documentSymbol
-       arrive in Phase 3. */
     frame_writef(s->out,
                  "{\"jsonrpc\":\"2.0\",\"id\":%.*s,\"result\":{\"capabilities\":{"
                  "\"textDocumentSync\":1,"
                  "\"hoverProvider\":true,"
                  "\"definitionProvider\":true,"
+                 "\"completionProvider\":{\"triggerCharacters\":[\".\",\":\"]},"
+                 "\"documentSymbolProvider\":true,"
                  "\"positionEncoding\":\"%s\"},"
                  "\"serverInfo\":{\"name\":\"oby\",\"version\":\"%s\"}}}",
                  (int)id_len, id, s->encoding, oby_version_str);
@@ -384,6 +391,464 @@ static void handle_definition(LspServer *s, const char *id, size_t id_len,
     json_buf_free(&b);
 }
 
+/* ------------------------------------------------------------------ */
+/* Completion                                                         */
+/* ------------------------------------------------------------------ */
+
+/* CompletionItemKind values for the items the server mints. */
+enum {
+    ITEM_METHOD = 2,
+    ITEM_FUNCTION = 3,
+    ITEM_FIELD = 5,
+    ITEM_VARIABLE = 6,
+    ITEM_CLASS = 7,
+    ITEM_KEYWORD = 14,
+    ITEM_ENUM_MEMBER = 20,
+    ITEM_CONSTANT = 21
+};
+
+typedef struct {
+    const char *name;
+    int kind;
+} LspItem;
+
+static int item_cmp(const void *a, const void *b) {
+    const LspItem *x = (const LspItem *)a;
+    const LspItem *y = (const LspItem *)b;
+    return strcmp(x->name, y->name);
+}
+
+/* Add one candidate, keeping the first sighting of a name. */
+static void item_add(Array *items, const char *name, int kind) {
+    if (!name || !name[0]) return;
+    for (size_t i = 0; i < array_length(items); i++) {
+        LspItem *item = (LspItem *)array_get(items, i);
+        if (strcmp(item->name, name) == 0) return;
+    }
+    LspItem item = { name, kind };
+    array_push(items, &item);
+}
+
+static int value_item_kind(const Symbol *sym) {
+    return (sym->type && sym->type->kind == TYPE_FUNC) ? ITEM_FUNCTION : ITEM_VARIABLE;
+}
+
+/* A static member that names the receiver: `find = (String s, ...)` is called
+   as `s.find(...)`. */
+static bool receiver_static(const Symbol *sym, const Type *type) {
+    return sym->is_static && sym->type && sym->type->kind == TYPE_FUNC &&
+           sym->type->param_count >= 1 && sym->type->params[0] == type;
+}
+
+/* A bare name's symbol: locals and parameters shadow the globals. */
+static Symbol *resolve_name(Scope *global, const char *source, size_t source_len,
+                            size_t offset, const char *name, ASTNode *program) {
+    Symbol *found = NULL;
+    Array *locals = array_new(sizeof(Symbol *));
+    if (locals) {
+        lsp_visible_bindings(program, source, source_len, offset, locals);
+        for (size_t i = 0; i < array_length(locals); i++) {
+            Symbol *sym = *(Symbol **)array_get(locals, i);
+            if (sym && sym->name && strcmp(sym->name, name) == 0) found = sym;
+        }
+        array_free(locals);
+    }
+    if (!found) found = scope_lookup(global, name);
+    return found;
+}
+
+/* The checked program to answer a completion against. When the document's own
+   pass stopped at the parser, its program has no types; re-checking a copy
+   with a sentinel byte spliced in at the cursor (`if x {` stays broken, but
+   `xs.` becomes `xs._`) recovers the types for everything before it. Returns
+   true when `repaired` must be freed. */
+static bool completion_program(LspDocument *doc, size_t offset, Frontend *repaired,
+                               const char **source, size_t *source_len,
+                               ASTNode **program, Scope **global) {
+    /* A global scope means sema ran, so the document parses. */
+    if (doc->fe.program && doc->fe.sema.global) {
+        *source = doc->source;
+        *source_len = doc->source_len;
+        *program = doc->fe.program;
+        *global = doc->fe.sema.global;
+        return false;
+    }
+
+    size_t len = doc->source_len;
+    char *patched = (char *)malloc(len + 2);
+    if (patched) {
+        memcpy(patched, doc->source, offset);
+        patched[offset] = '_';
+        memcpy(patched + offset + 1, doc->source + offset, len - offset + 1);
+
+        frontend_init(repaired);
+        diag_set_capture(&repaired->diag, true);
+        frontend_run(repaired, doc_label(doc), patched);
+
+        *source = repaired->source ? repaired->source : doc->source;
+        *source_len = repaired->source ? strlen(repaired->source) : 0;
+        *program = repaired->program ? repaired->program : doc->fe.program;
+        *global = repaired->program ? repaired->sema.global : doc->fe.sema.global;
+        return repaired->program != NULL;
+    }
+
+    *source = doc->source;
+    *source_len = doc->source_len;
+    *program = doc->fe.program;
+    *global = doc->fe.sema.global;
+    return false;
+}
+
+static void handle_completion(LspServer *s, const char *id, size_t id_len,
+                              const JsonValue *params) {
+    LspDocument *doc = NULL;
+    size_t offset = 0;
+    if (!position_params(s, params, &doc, &offset)) {
+        send_result(s, id, id_len, "null");
+        return;
+    }
+
+    Frontend repaired;
+    const char *source = NULL;
+    size_t source_len = 0;
+    ASTNode *program = NULL;
+    Scope *global = NULL;
+    bool must_free = completion_program(doc, offset, &repaired, &source, &source_len,
+                                        &program, &global);
+    if (!program) {
+        send_result(s, id, id_len, "null");
+        if (must_free) frontend_free(&repaired);
+        return;
+    }
+
+    LspCompletion c = lsp_completion_at(doc->source, doc->source_len, offset);
+    Array *items = array_new(sizeof(LspItem));
+    bool resolved = true;
+
+    if (c.kind == LSP_COMPLETE_MEMBER) {
+        /* The receiver's type: the AST node ending at the dot, or — when the
+           text is too broken even for the repaired pass — a bare name
+           resolved like any use. */
+        Type *type = NULL;
+        if (c.receiver_end > 0) {
+            LspTarget t = lsp_target_at(program, source, source_len, c.receiver_end - 1);
+            type = t.type ? t.type : (t.sym ? t.sym->type : NULL);
+        }
+        if ((!type || type->kind == TYPE_UNKNOWN) && c.receiver_len) {
+            Symbol *sym = resolve_name(global, source, source_len, offset, c.receiver,
+                                       program);
+            if (sym) type = sym->type;
+        }
+
+        if (!type || type->kind == TYPE_UNKNOWN) {
+            resolved = false;
+        } else if (type->kind == TYPE_ARRAY) {
+            item_add(items, "insert", ITEM_METHOD);
+            item_add(items, "pop", ITEM_METHOD);
+            item_add(items, "push", ITEM_METHOD);
+            item_add(items, "remove", ITEM_METHOD);
+        } else if (type->members) {
+            for (size_t i = 0; i < array_length(type->members->symbols); i++) {
+                Symbol *m = *(Symbol **)array_get(type->members->symbols, i);
+                if (!m || !m->name) continue;
+                bool func = m->type && m->type->kind == TYPE_FUNC;
+                if (!m->is_static)
+                    item_add(items, m->name, func ? ITEM_METHOD : ITEM_FIELD);
+                else if (receiver_static(m, type))
+                    item_add(items, m->name, ITEM_FUNCTION);
+            }
+        }
+    } else if (c.kind == LSP_COMPLETE_STATIC) {
+        Symbol *sym = c.receiver_len
+                          ? resolve_name(global, source, source_len, offset,
+                                         c.receiver, program)
+                          : NULL;
+        if (!sym || sym->kind != SYM_TYPE || !sym->type || !sym->type->members) {
+            resolved = false;
+        } else {
+            for (size_t i = 0; i < array_length(sym->type->members->symbols); i++) {
+                Symbol *m = *(Symbol **)array_get(sym->type->members->symbols, i);
+                if (!m || !m->name || !m->is_static) continue;
+                int kind = m->is_enum_item
+                               ? ITEM_ENUM_MEMBER
+                               : (m->type && m->type->kind == TYPE_FUNC ? ITEM_FUNCTION
+                                                                        : ITEM_CONSTANT);
+                item_add(items, m->name, kind);
+            }
+        }
+    } else {
+        static const char *const keywords[] = {
+            "break", "case", "continue", "default", "else", "enum", "extern",
+            "for", "if", "local", "null", "packed", "return", "switch", "type",
+            "use", "while"
+        };
+        for (size_t i = 0; i < sizeof keywords / sizeof keywords[0]; i++)
+            item_add(items, keywords[i], ITEM_KEYWORD);
+
+        if (global) {
+            for (size_t i = 0; i < array_length(global->symbols); i++) {
+                Symbol *sym = *(Symbol **)array_get(global->symbols, i);
+                if (!sym || !sym->name) continue;
+                if (sym->kind == SYM_TYPE) item_add(items, sym->name, ITEM_CLASS);
+                else if (sym->kind == SYM_FUNC) item_add(items, sym->name, ITEM_FUNCTION);
+                else if (sym->kind == SYM_VALUE)
+                    item_add(items, sym->name, value_item_kind(sym));
+            }
+        }
+
+        Array *locals = array_new(sizeof(Symbol *));
+        if (locals) {
+            lsp_visible_bindings(program, source, source_len, offset, locals);
+            for (size_t i = 0; i < array_length(locals); i++) {
+                Symbol *sym = *(Symbol **)array_get(locals, i);
+                if (sym && sym->name)
+                    item_add(items, sym->name, value_item_kind(sym));
+            }
+            array_free(locals);
+        }
+    }
+
+    if (must_free) frontend_free(&repaired);
+
+    if (!resolved) {
+        array_free(items);
+        send_result(s, id, id_len, "null");
+        return;
+    }
+
+    /* Keep the prefix's candidates and sort for a stable list. */
+    size_t kept = 0;
+    LspItem *data = (LspItem *)array_data(items);
+    for (size_t i = 0; i < array_length(items); i++) {
+        if (strncmp(data[i].name, c.prefix, c.prefix_len) == 0) data[kept++] = data[i];
+    }
+    array_set_length(items, kept);
+    if (kept > 0) qsort(data, kept, sizeof(LspItem), item_cmp);
+
+    JsonBuf b;
+    json_buf_init(&b);
+    json_buf_printf(&b, "[");
+    for (size_t i = 0; i < kept; i++) {
+        json_buf_printf(&b, "%s{\"label\":\"", i ? "," : "");
+        json_buf_escape(&b, data[i].name);
+        json_buf_printf(&b, "\",\"kind\":%d}", data[i].kind);
+    }
+    json_buf_printf(&b, "]");
+    if (!b.oom) send_result(s, id, id_len, b.data);
+    json_buf_free(&b);
+    array_free(items);
+}
+
+/* ------------------------------------------------------------------ */
+/* Document symbols                                                   */
+/* ------------------------------------------------------------------ */
+
+/* SymbolKind values — a different enum from the completion item kinds. */
+enum {
+    SYMBOL_CLASS = 5,
+    SYMBOL_METHOD = 6,
+    SYMBOL_FIELD = 8,
+    SYMBOL_ENUM = 10,
+    SYMBOL_FUNCTION = 12,
+    SYMBOL_VARIABLE = 13,
+    SYMBOL_ENUM_MEMBER = 22,
+    SYMBOL_STRUCT = 23
+};
+
+/* The token's byte span inside the document; false when it is from elsewhere. */
+static bool token_span(LspDocument *doc, Token tok, size_t *start, size_t *end) {
+    if (!lsp_token_in_source(doc->source, doc->source_len, tok)) return false;
+    *start = (size_t)(tok.start - doc->source);
+    *end = *start + (tok.length > 0 ? tok.length : 1);
+    if (*end > doc->source_len) *end = doc->source_len;
+    return true;
+}
+
+static void emit_range(JsonBuf *b, LspServer *s, LspDocument *doc, bool have,
+                       size_t start, size_t end) {
+    if (!have) {
+        start = 0;
+        end = 0;
+    }
+    LspPosition a = lsp_position_of(doc->source, doc->source_len, start, s->encoding);
+    LspPosition z = lsp_position_of(doc->source, doc->source_len, end, s->encoding);
+    json_buf_printf(b,
+                    "{\"start\":{\"line\":%d,\"character\":%d},"
+                    "\"end\":{\"line\":%d,\"character\":%d}}",
+                    a.line, a.character, z.line, z.character);
+}
+
+/* One outline entry. `children_json` is a prebuilt array for hierarchical
+   clients; flat clients get the members as siblings with `containerName`. */
+static void emit_symbol(JsonBuf *b, LspServer *s, LspDocument *doc, const char *name,
+                        int kind, Token tok, const char *container,
+                        const char *children_json, bool first) {
+    size_t start = 0, end = 0;
+    bool have = token_span(doc, tok, &start, &end);
+
+    json_buf_printf(b, "%s{\"name\":\"", first ? "" : ",");
+    json_buf_escape(b, name);
+    json_buf_printf(b, "\",\"kind\":%d", kind);
+    if (s->hierarchical_symbols) {
+        json_buf_printf(b, ",\"range\":");
+        emit_range(b, s, doc, have, start, end);
+        json_buf_printf(b, ",\"selectionRange\":");
+        emit_range(b, s, doc, have, start, end);
+        if (children_json && children_json[0])
+            json_buf_printf(b, ",\"children\":%s", children_json);
+    } else {
+        json_buf_printf(b, ",\"location\":{\"uri\":\"");
+        json_buf_escape(b, doc->uri);
+        json_buf_printf(b, "\",\"range\":");
+        emit_range(b, s, doc, have, start, end);
+        json_buf_printf(b, "}");
+        if (container && container[0]) {
+            json_buf_printf(b, ",\"containerName\":\"");
+            json_buf_escape(b, container);
+            json_buf_printf(b, "\"");
+        }
+    }
+    json_buf_printf(b, "}");
+}
+
+/* The last name of a path node, or NULL. */
+static const char *path_tail(ASTNode *path) {
+    if (!path || path->kind != AST_PATH) return NULL;
+    Array *parts = path->as.path.parts;
+    if (array_length(parts) == 0) return NULL;
+    PathSegment *seg = (PathSegment *)array_get(parts, array_length(parts) - 1);
+    return seg->name;
+}
+
+/* The outline entry a top-level statement makes, or false when it names
+   nothing. */
+static bool decl_head(ASTNode *stmt, const char **name, int *kind) {
+    if (!stmt) return false;
+    if (stmt->kind == AST_TYPE_DEF || stmt->kind == AST_PACKED_DEF ||
+        stmt->kind == AST_ENUM_DEF) {
+        /* A type definition keeps no symbol on the statement (unlike binds),
+           so the name comes from the type or from the target path. */
+        ASTNode *target = stmt->kind == AST_TYPE_DEF     ? stmt->as.type_def.target
+                          : stmt->kind == AST_PACKED_DEF ? stmt->as.packed_def.target
+                                                         : stmt->as.enum_def.target;
+        const char *n = (stmt->sym && stmt->sym->name) ? stmt->sym->name : NULL;
+        if (!n && stmt->type) n = stmt->type->name;
+        if (!n) n = path_tail(target);
+        if (!n || !n[0]) return false;
+        *name = n;
+        *kind = stmt->kind == AST_TYPE_DEF     ? SYMBOL_CLASS
+                : stmt->kind == AST_PACKED_DEF ? SYMBOL_STRUCT
+                                               : SYMBOL_ENUM;
+        return true;
+    }
+    if (stmt->kind == AST_BIND || stmt->kind == AST_ASSIGN) {
+        if (!stmt->sym || !stmt->sym->name) return false;
+        *name = stmt->sym->name;
+        *kind = (stmt->sym->type && stmt->sym->type->kind == TYPE_FUNC)
+                    ? SYMBOL_FUNCTION
+                    : SYMBOL_VARIABLE;
+        return true;
+    }
+    return false;
+}
+
+/* One member of a type body as an outline entry. */
+static void emit_member(JsonBuf *b, LspServer *s, LspDocument *doc, ASTNode *field,
+                        const char *container, bool *first) {
+    if (!field) return;
+    const char *name = NULL;
+    int kind = SYMBOL_FIELD;
+    Token tok = field->token;
+
+    if (field->kind == AST_ASSIGN || field->kind == AST_BIND) {
+        if (!field->sym || !field->sym->name) return;
+        name = field->sym->name;
+        kind = (field->sym->type && field->sym->type->kind == TYPE_FUNC)
+                   ? SYMBOL_METHOD
+                   : SYMBOL_FIELD;
+    } else if (field->kind == AST_MEMBER_ASSIGN) {
+        name = field->as.member_assign.member;
+        if (field->as.member_assign.member_tok.start)
+            tok = field->as.member_assign.member_tok;
+        bool func = field->sym && field->sym->type &&
+                    field->sym->type->kind == TYPE_FUNC;
+        kind = func ? SYMBOL_METHOD : SYMBOL_FIELD;
+    } else {
+        return;
+    }
+
+    emit_symbol(b, s, doc, name, kind, tok, container, NULL, *first);
+    *first = false;
+}
+
+/* A declaration's members, in source order. */
+static void emit_children(JsonBuf *b, LspServer *s, LspDocument *doc, ASTNode *stmt,
+                          const char *container, bool *first) {
+    if (stmt->kind == AST_ENUM_DEF) {
+        Array *items = stmt->as.enum_def.items;
+        for (size_t i = 0; items && i < array_length(items); i++) {
+            EnumItem *item = (EnumItem *)array_get(items, i);
+            if (!item->name) continue;
+            emit_symbol(b, s, doc, item->name, SYMBOL_ENUM_MEMBER, item->tok, container,
+                        NULL, *first);
+            *first = false;
+        }
+        return;
+    }
+
+    ASTNode *body = stmt->kind == AST_TYPE_DEF       ? stmt->as.type_def.body
+                    : stmt->kind == AST_PACKED_DEF   ? stmt->as.packed_def.body
+                                                     : NULL;
+    if (!body || body->kind != AST_TABLE_LITERAL) return;
+    Array *fields = body->as.table.fields;
+    for (size_t i = 0; fields && i < array_length(fields); i++) {
+        emit_member(b, s, doc, *(ASTNode **)array_get(fields, i), container, first);
+    }
+}
+
+static void handle_document_symbols(LspServer *s, const char *id, size_t id_len,
+                                    const JsonValue *params) {
+    const JsonValue *td = json_get(params, "textDocument");
+    const char *uri = json_string(json_get(td, "uri"));
+    LspDocument *doc = uri ? doc_find(s, uri) : NULL;
+    if (!doc || !doc->fe.program) {
+        send_result(s, id, id_len, "null");
+        return;
+    }
+
+    JsonBuf out;
+    json_buf_init(&out);
+    json_buf_printf(&out, "[");
+    bool first = true;
+    Array *stmts = doc->fe.program->as.program.stmts;
+    for (size_t i = 0; stmts && i < array_length(stmts); i++) {
+        ASTNode *stmt = *(ASTNode **)array_get(stmts, i);
+        const char *name = NULL;
+        int kind = 0;
+        if (!decl_head(stmt, &name, &kind)) continue;
+
+        if (s->hierarchical_symbols) {
+            JsonBuf kids;
+            json_buf_init(&kids);
+            json_buf_printf(&kids, "[");
+            bool kids_first = true;
+            emit_children(&kids, s, doc, stmt, NULL, &kids_first);
+            json_buf_printf(&kids, "]");
+            emit_symbol(&out, s, doc, name, kind, stmt->token, NULL,
+                        kids_first ? NULL : kids.data, first);
+            json_buf_free(&kids);
+        } else {
+            emit_symbol(&out, s, doc, name, kind, stmt->token, NULL, NULL, first);
+            emit_children(&out, s, doc, stmt, name, &first);
+        }
+        first = false;
+    }
+    json_buf_printf(&out, "]");
+
+    if (!out.oom) send_result(s, id, id_len, out.data);
+    json_buf_free(&out);
+}
+
 /* Handle one parsed message. Returns true when `exit` arrived. */
 static bool handle_message(LspServer *s, JsonValue *msg) {
     const char *method = json_string(json_get(msg, "method"));
@@ -449,6 +914,14 @@ static bool handle_message(LspServer *s, JsonValue *msg) {
     }
     if (strcmp(method, "textDocument/definition") == 0) {
         if (is_request) handle_definition(s, id, id_len, json_get(msg, "params"));
+        return false;
+    }
+    if (strcmp(method, "textDocument/completion") == 0) {
+        if (is_request) handle_completion(s, id, id_len, json_get(msg, "params"));
+        return false;
+    }
+    if (strcmp(method, "textDocument/documentSymbol") == 0) {
+        if (is_request) handle_document_symbols(s, id, id_len, json_get(msg, "params"));
         return false;
     }
 
