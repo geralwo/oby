@@ -43,6 +43,12 @@ bash compile.sh          # -> build/oby
 | `languages/oby/config.toml` | `Oby` = `*.oby`, with grammar `oby` |
 | `extension.wasm` | the stub that registers the server name (sha256 `ec9df651072fcf8e57e9ddeeaac1d4eef2f31a8ac78339493798f5378bfa3914`) |
 | `grammars/oby.wasm` | the compiled grammar, built from this repository |
+| `languages/oby/*.scm` | the queries Zed colours with — `highlights`, `brackets`, `indents`, `outline` |
+
+Zed reads a language's queries from the language folder, not from the grammar,
+so those four files live here as well as in `editors/tree-sitter-oby/queries/`.
+The copies next to `config.toml` are the ones that apply; the grammar's are for
+the tree-sitter CLI and for editors that fetch a grammar whole.
 
 Both blobs are committed and nothing is built or fetched at install time. That
 is deliberate: a folder dropped into `extensions/installed/` is treated as

@@ -100,6 +100,12 @@ The queries:
 - `queries/outline.scm` — the outline panel
 - `queries/indents.scm` — auto-indentation
 
+**Zed reads a language's queries from the extension's language folder, not from
+the grammar**, so `editors/zed/lspaddon/languages/oby/` holds copies of these
+four files — those are the ones that colour a buffer. Keep the two sets in step;
+these are the tree-sitter copies, for the CLI and for editors that fetch a
+grammar whole.
+
 ## Layout
 
 ```
