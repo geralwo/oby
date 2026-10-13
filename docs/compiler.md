@@ -165,10 +165,11 @@ a `use`d file also shows how it was reached:
 | `oby --bundle <script.oby> <output>` | write a standalone executable |
 | `oby -h` / `-v` | help / version |
 
-Everything after the script path belongs to the script, not to `oby`: it is what
-`args()` returns, and a flag written there is not an option. Options are only
-recognized before the script path, so `oby tool.oby -check` runs `tool.oby` with
-`-check` as an argument.
+Everything after the script path belongs to the script, not to `oby`: a flag
+written there is not an option. `args()` is the command line the program sees —
+`[0]` is the script path (or the executable, when the program is bundled) and
+the rest are its arguments — so `oby tool.oby -check` runs `tool.oby` with
+`-check` as `args()[1]`.
 
 `-printast` output comes from `ast_printer.c`: an indented tree where each node
 shows its kind, its resolved type, and the names involved.

@@ -1,3 +1,6 @@
-// The harness runs a test with no arguments, so `args()` is there and empty.
-// `tests/args_cli_test.c` covers passing real ones.
+// The harness runs a test with no arguments: `args()` holds just the file it
+// was run with, and `args()[0]` is that path. (The suffix is bound first: a
+// string literal with escapes cannot sit inside `${...}`.)
+suffix = "args_test.oby"
 print("${args().length}\n")
+print("${args()[0].ends_with(suffix)}\n")

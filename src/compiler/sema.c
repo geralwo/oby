@@ -4144,6 +4144,11 @@ static void check_block(Sema *s, ASTNode *block, Scope *scope) {
 /* ------------------------------------------------------------------ */
 
 void sema_init(Sema *s, Arena *arena, Diagnostics *diag) {
+    /* Callers pass a stack struct, so start from a defined state: every field is
+       read somewhere (`cur_receiver`/`cur_owner` are saved and restored around
+       each method body), and a missed assignment must not turn into
+       stack-dependent behaviour. */
+    memset(s, 0, sizeof *s);
     s->arena = arena;
     type_context_init(&s->types, arena);
     s->global = scope_new(arena, NULL);

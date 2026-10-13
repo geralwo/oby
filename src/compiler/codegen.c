@@ -1403,7 +1403,10 @@ static void gen_stmt(Codegen *cg, ASTNode *node) {
 /* ------------------------------------------------------------------ */
 
 CompiledProgram *codegen_run(Sema *sema, Arena *arena) {
+    /* Same reason as `sema_init`: the struct is on the stack, so define every
+       field before use rather than relying on what happens to be there. */
     Codegen cg;
+    memset(&cg, 0, sizeof cg);
     cg.sema = sema;
     cg.arena = arena;
     cg.diag = sema->diag;

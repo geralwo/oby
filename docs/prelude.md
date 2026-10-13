@@ -58,7 +58,7 @@ level rather than behind a namespace: `print`, `args`, `rand`, `read_file`,
 | `uint64::to_str(uint64) -> String` | `extern uint64_to_str` |
 | `int64::to_str(int64) -> String` | `extern int64_to_str` |
 | `print(String)` | buffered write to stdout; `Terminal::flush()` makes it visible |
-| `args() -> String[]` | the program's arguments: after the script path, or after the executable when bundled (`extern io_args`) |
+| `args() -> String[]` | the command line: `[0]` is the program (the script path, or the executable when bundled), the rest are its arguments (`extern io_args`) |
 
 Crossing signedness is never implicit, so the constructors that do it are
 natives: `uint(i)`, `int(u)`, `uint64(i64)`, `int64(u64)`, and `uint` from the

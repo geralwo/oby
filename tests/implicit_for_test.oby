@@ -1,0 +1,4 @@
+// A bare `i = 0` in a `for` header (the implicit local) goes through the
+// "is this one of my receiver's members?" path, which used to read an
+// uninitialized field of the checker and segfault depending on the layout.
+for(i = 0; i < 3; i += 1) { print("${i}\n") }

@@ -677,8 +677,9 @@ static Value nat_read_dir(Value *args, int argc) {
 /* Process context                                                     */
 /* ------------------------------------------------------------------ */
 
-/* io_args() -> String[] : the arguments the program was given — everything
-   after the script path, or after the executable itself when bundled. */
+/* io_args() -> String[] : the program's command line. `[0]` is the program
+   itself (the script path, or the executable when bundled); the rest are its
+   arguments. */
 static Value nat_args(Value *args, int argc) {
     (void)args;
     (void)argc;

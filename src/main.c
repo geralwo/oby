@@ -21,7 +21,7 @@
 #include "vm/image.h"
 #include "vm/vm.h"
 
-const char *oby_version_str = "0.6.1";
+const char *oby_version_str = "0.6.3";
 
 /* Command-line options. */
 typedef struct {
@@ -353,11 +353,11 @@ static bool try_run_bundle(const char *argv0, int *status) {
 }
 
 int main(int argc, char *argv[]) {
-    /* The arguments the program was given. `parse_args` below re-slices them
-       after the script path once it knows where that is; a bundled binary
-       never gets there, so argv[1..] is what its program sees. Nothing reads
-       them unless the program asks for `args()`. */
-    os_args_init(argc > 0 ? argc - 1 : 0, argv + 1);
+    /* The command line the program sees. A bundled binary *is* the program, so
+       its argv is the whole command line and args()[0] is the executable; the
+       CLI re-slices below, where args()[0] becomes the script path. `parse_args`
+       knows that index; a bundled binary never gets there. */
+    os_args_init(argc, argv);
 
     int bundle_status = 0;
     if (try_run_bundle(argv[0], &bundle_status)) return bundle_status;
@@ -372,7 +372,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    os_args_init(argc - opts.arg_index, argv + opts.arg_index);
+    os_args_init(argc - opts.arg_index + 1, argv + opts.arg_index - 1);
 
     if (opts.bundle) return bundle_command(argv[0], opts.input, opts.output);
 

@@ -52,8 +52,9 @@ use "Set.oby"
 // visible immediately.
 print = extern term_print(String s) -> void
 
-// The arguments the program was given: everything after the script path, so
-// `oby tool.oby a b` and a bundled `tool a b` both see ["a", "b"]. A bundled
-// executable is its own interpreter, so there its arguments start after the
-// executable itself.
+// The command line the program was run with. `args()[0]` is the program itself
+// — the script path, or the executable when bundled — and the rest are its
+// arguments: `oby tool.oby a b` and a bundled `tool a b` both see `a` and `b`
+// after it. Nothing after the script path is interpreted by the compiler: a
+// flag there belongs to the script.
 args = extern io_args() -> String[]

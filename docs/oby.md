@@ -1066,10 +1066,10 @@ and must not be freed twice or through an alias. Values that are not heap
 allocated (numbers, functions) are ignored. A view such as `s.buffer` is owned
 by its string and is not freed.
 
-`args()` is the arguments the program was given: everything after the script
-path, so `oby tool.oby a b` and a bundled `tool a b` both see `["a", "b"]` (a
-bundled executable is its own interpreter, so there its arguments start after
-the executable itself). Nothing after the script path is interpreted by the
+`args()` is the command line the program was run with: `args()[0]` is the program
+itself — the script path, or the executable when the program is bundled — and
+the rest are its arguments, so `oby tool.oby a b` and a bundled `tool a b` both
+see `"a"` and `"b"` after it. Nothing after the script path is interpreted by the
 compiler: a flag there belongs to the script.
 
 `byte::new` is the explicit narrowing conversion (`byte(300)` is `44`); the type
@@ -1126,11 +1126,10 @@ oby --bundle game/main.oby game
 
 The output is **a copy of `oby` with the compiled program appended**, so it
 needs no OBY installation, no `src/prelude/`, no script files and no toolchain:
-it compiles nothing at startup. Delete the sources and it still runs, and it
-takes its own arguments: everything after the executable is what `args()`
-returns. Imports are baked in at bundle time, so a `use`
-of something that does not exist is a bundle-time error like any other
-diagnostic.
+it compiles nothing at startup. Delete the sources and it still runs with its own
+command line: `args()` is the executable followed by whatever it was given.
+Imports are baked in at bundle time, so a `use` of something that does not exist
+is a bundle-time error like any other diagnostic.
 
 Because the artifact carries the toolchain, it is about **256 KB plus the
 program** — the compiled prelude alone is ~17 KB, a small game ~30 KB — rather
