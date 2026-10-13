@@ -19,6 +19,7 @@ src/compiler/diag.c
 src/compiler/codegen.c
 src/native/native.c
 src/native/io.c
+src/native/net.c
 src/native/strings.c
 src/native/memory.c
 src/native/terminal.c

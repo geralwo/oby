@@ -17,6 +17,7 @@
 #endif
 
 static Type *check_expr(Sema *s, ASTNode *node, Scope *scope);
+static Type *lookup_builtin(Sema *s, const char *name);
 
 /* Used by the numeric rules, which sit above these definitions. */
 static bool is_numeric(Type *t);
@@ -1370,6 +1371,29 @@ static bool member_is_template(ASTNode *value) {
            array_length(value->as.func.type_params) > 0;
 }
 
+/* `::==` and `::<` are the comparison members: two parameters of the owner type
+   and an `int` result (0/1), like the built-in comparisons. The other four
+   comparisons are derived from these two. */
+static void check_comparison_member(Sema *s, Type *owner, const char *member,
+                                    Type *mt, Token at) {
+    if (strcmp(member, "==") != 0 && strcmp(member, "<") != 0) return;
+    if (!owner || owner->kind != TYPE_OBJ) {
+        sema_error(s, at, "'::%s' can only be defined inside a type body", member);
+        return;
+    }
+    if (!mt || mt->kind != TYPE_FUNC) {
+        sema_error(s, at, "'::%s' must be a function", member);
+        return;
+    }
+    if (mt->param_count != 2 || mt->params[0] != owner || mt->params[1] != owner) {
+        sema_error(s, at, "'::%s' takes two '%s' parameters", member,
+                   owner->name ? owner->name : "?");
+        return;
+    }
+    if (mt->ret != lookup_builtin(s, "int"))
+        sema_error(s, at, "'::%s' must return 'int'", member);
+}
+
 static void collect_member_assign(Sema *s, ASTNode *node, Type *owner, Scope *scope) {
     const char *member = node->as.member_assign.member;
     bool is_static = node->as.member_assign.is_static;
@@ -1398,6 +1422,7 @@ static void collect_member_assign(Sema *s, ASTNode *node, Type *owner, Scope *sc
         value->as.extern_def.native_id = native_id;
     }
     node->type = mt;
+    if (is_static) check_comparison_member(s, owner, member, mt, node->token);
     /* A member whose owner's type is not known yet cannot be collected: the
        check phase resolves it once the type is final. (Defining it here would
        pollute the shared unknown type.) */
@@ -2051,6 +2076,73 @@ static bool is_comparison(TokenKind k) {
     return k == TOKEN_EQUAL_EQUAL || k == TOKEN_BANG_EQUAL ||
            k == TOKEN_LT || k == TOKEN_GT ||
            k == TOKEN_LESS_EQUAL || k == TOKEN_GREATER_EQUAL;
+}
+
+/* The static member that implements `op` for `t`, or NULL when the type has
+   none — then the built-in comparison applies. */
+static Symbol *comparison_member(Type *t, TokenKind op) {
+    if (!t || t->kind != TYPE_OBJ || !t->members) return NULL;
+    const char *name = (op == TOKEN_EQUAL_EQUAL || op == TOKEN_BANG_EQUAL) ? "==" : "<";
+    Symbol *m = scope_lookup_local(t->members, name);
+    if (!m || m->kind != SYM_MEMBER || !m->is_static) return NULL;
+    if (!m->type || m->type->kind != TYPE_FUNC) return NULL;
+    return m;
+}
+
+/* Rewrite `a op b` into the call that implements it: `T::==(a, b)`, `T::<(b, a)`
+   for `>`, and `not` around the call for the negated operators. The operands are
+   reused as they are (they are already checked), and codegen sees an ordinary
+   call to a static member. */
+static void rewrite_comparison(Sema *s, ASTNode *node, Symbol *member) {
+    TokenKind op = node->as.binary.op.kind;
+    ASTNode *left = node->as.binary.left;
+    ASTNode *right = node->as.binary.right;
+    bool negate = op == TOKEN_BANG_EQUAL || op == TOKEN_LESS_EQUAL ||
+                  op == TOKEN_GREATER_EQUAL;
+    if (op == TOKEN_GT || op == TOKEN_LESS_EQUAL) {
+        ASTNode *swap = left;
+        left = right;
+        right = swap;
+    }
+
+    ASTNode *callee = ast_node_new(s->arena, AST_PATH, node->token);
+    callee->as.path.parts = array_new(sizeof(PathSegment));
+    PathSegment seg;
+    seg.name = (char *)member->name;
+    seg.is_static = true;
+    seg.type_args = NULL;
+    array_push(callee->as.path.parts, &seg);
+    callee->as.path.is_global = false;
+    callee->as.path.syms = NULL;
+    callee->sym = member;
+    callee->type = member->type;
+
+    ASTNode *call = ast_node_new(s->arena, AST_CALL, node->token);
+    call->as.call.callee = callee;
+    call->as.call.args = array_new(sizeof(ASTNode *));
+    array_push(call->as.call.args, &left);
+    array_push(call->as.call.args, &right);
+    call->as.call.builtin = BUILTIN_NONE;
+    call->type = lookup_builtin(s, "int");
+
+    if (!negate) {
+        node->kind = AST_CALL;
+        node->as.call = call->as.call;
+        node->type = call->type;
+        return;
+    }
+
+    /* `a != b` is `not T::==(a, b)`, and the same shape for `<=` and `>=`. */
+    Token not_tok;
+    not_tok.kind = TOKEN_IDENTIFIER;
+    not_tok.start = "not";
+    not_tok.length = 3;
+    not_tok.line = node->token.line;
+    not_tok.message = NULL;
+    node->kind = AST_UNARY_EXPR;
+    node->as.unary.op = not_tok;
+    node->as.unary.operand = call;
+    node->type = lookup_builtin(s, "int");
 }
 
 /* True if `t` is the contextual keyword `kw`. */
@@ -3440,12 +3532,18 @@ static Type *check_expr(Sema *s, ASTNode *node, Scope *scope) {
             if (is_comparison(op)) {
                 /* `null` compares only with tagged values. */
                 Type *other = (l->kind == TYPE_NULL) ? r : (r->kind == TYPE_NULL ? l : NULL);
+                /* A nominal type may define its own comparison (`::==` and
+                   `::<`); the other four operators follow from those two. */
+                Symbol *cmp = (l == r && !other) ? comparison_member(l, op) : NULL;
                 if (other && other->kind != TYPE_NULL && other->kind != TYPE_UNKNOWN &&
                     !is_tagged_type(other)) {
                     char a[64], b[64];
                     type_str(l, a, sizeof(a));
                     type_str(r, b, sizeof(b));
                     sema_error(s, node->token, "cannot compare '%s' and '%s'", a, b);
+                } else if (cmp) {
+                    rewrite_comparison(s, node, cmp);
+                    return node->type;
                 } else if (is_packed_agg(l) || is_packed_agg(r)) {
                     if (l != r) {
                         char a[64], b[64];
@@ -3455,6 +3553,12 @@ static Type *check_expr(Sema *s, ASTNode *node, Scope *scope) {
                     } else if (op != TOKEN_EQUAL_EQUAL && op != TOKEN_BANG_EQUAL) {
                         sema_error(s, node->token, "cannot order packed values ('%s')", l->name);
                     }
+                } else if (op != TOKEN_EQUAL_EQUAL && op != TOKEN_BANG_EQUAL &&
+                           l == r && l->kind == TYPE_OBJ) {
+                    /* Equality is identity without `::==`, but there is no
+                       ordering to fall back on. */
+                    sema_error(s, node->token, "cannot order '%s'; define '::<' for it",
+                               l->name ? l->name : "?");
                 } else if (l->kind != TYPE_UNKNOWN && r->kind != TYPE_UNKNOWN &&
                            is_numeric(l) && is_numeric(r) &&
                            !is_float_type(l) && !is_float_type(r) &&
@@ -4062,6 +4166,9 @@ static void check_stmt(Sema *s, ASTNode *node, Scope *scope) {
                 ASTNode *v = c->as.case_stmt.value;
                 check_case_type(s, st, v, check_expr(s, v, scope));
                 ASTNode *hi = c->as.case_stmt.range_hi;
+                /* A type with `::==` matches through it, so `switch` agrees
+                   with `if`. Codegen reads the member off the case. */
+                if (!hi) c->sym = comparison_member(st, TOKEN_EQUAL_EQUAL);
                 if (hi) {
                     check_case_type(s, st, hi, check_expr(s, hi, scope));
                     if (st && !range_switch_kind(st)) {

@@ -1,0 +1,106 @@
+// TCP sockets. A socket is a file descriptor, so the io layer's reads and
+// writes work on it unchanged; this type is the ergonomic wrapper, the way
+// `File` is for files. `fd` is -1 when the socket is not open, so a failed
+// connect or listen is a closed Socket rather than an error, and
+// `io::last_error()` says why.
+//
+// The `net::` natives are the raw layer (`Socket` is written on top of them);
+// they take and return file descriptors, so `read`/`write`/`io::close` work on
+// them directly.
+//
+// Temporaries are `local` (see File.oby).
+
+// The raw socket layer: a type used as a namespace, like `io`. It takes and
+// returns file descriptors, so `read`/`write`/`io::close` work on them directly.
+net = type {}
+
+net::connect = extern net_connect(String host, int port) -> int
+net::listen = extern net_listen(String host, int port, int backlog) -> int
+net::accept = extern net_accept(int fd) -> int
+net::local_port = extern net_local_port(int fd) -> int
+net::resolve = extern net_resolve(String host) -> String
+net::set_nonblocking = extern net_set_nonblocking(int fd, int on) -> int
+net::poll = extern net_poll(int fd, int timeout_ms) -> int
+
+Socket = type {
+	fd = -1
+	::new = () -> Socket { return {} }
+}
+
+// A connected socket to `host:port`; `host` may be "" for the local machine.
+Socket::connect = (String host, int port) -> Socket {
+	return { fd = net::connect(host, port) }
+}
+
+// A listening socket on `host:port`; `host` may be "" for any interface. Port 0
+// asks the system for a free one — `Socket::local_port` reports what it chose.
+Socket::listen = (String host, int port) -> Socket {
+	return { fd = net::listen(host, port, 16) }
+}
+
+// The port a socket is bound to, or -1.
+Socket::local_port = (Socket s) -> int {
+	return net::local_port(s.fd)
+}
+
+// The first address `host` resolves to, as text; null when it does not resolve.
+Socket::resolve = (String host) -> String {
+	return net::resolve(host)
+}
+
+// The next client of a listening socket, or a closed Socket.
+Socket::accept = (Socket s) -> Socket {
+	return { fd = net::accept(s.fd) }
+}
+
+Socket::is_open = (Socket s) -> int {
+	if s.fd < 0 { return 0 }
+	return 1
+}
+
+Socket::close = (Socket s) {
+	if s.fd >= 0 {
+		io::close(s.fd)
+		s.fd = -1
+	}
+}
+
+// Up to `count` bytes as a String; `""` at the end of the stream, `null` on a
+// closed socket or an error.
+Socket::read = (Socket s, int count) -> String {
+	if count <= 0 { return "" }
+	return io::read_string(s.fd, count)
+}
+
+// The same read, as raw bytes; `null` at the end of the stream or on error.
+Socket::read_bytes = (Socket s, int count) -> byte[] {
+	if count <= 0 { return null }
+	return io::read_bytes(s.fd, count)
+}
+
+// One line without its newline; `null` at the end of the stream.
+Socket::read_line = (Socket s) -> String {
+	return io::read_line(s.fd)
+}
+
+// Everything until the peer closes; `null` on error.
+Socket::read_all = (Socket s) -> String {
+	return io::read_all(s.fd)
+}
+
+Socket::write = (Socket s, String text) -> int {
+	return io::write(s.fd, text.buffer, text.length)
+}
+
+Socket::write_bytes = (Socket s, byte[] buf, int count) -> int {
+	return io::write(s.fd, buf, count)
+}
+
+// 1 when readable, 0 on timeout, -1 on error.
+Socket::poll = (Socket s, int timeout_ms) -> int {
+	return net::poll(s.fd, timeout_ms)
+}
+
+Socket::set_nonblocking = (Socket s, int on) -> int {
+	return net::set_nonblocking(s.fd, on)
+}

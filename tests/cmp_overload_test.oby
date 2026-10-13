@@ -1,0 +1,58 @@
+// A nominal type can define its own comparisons: `::==` and `::<` take two of
+// the type and return int (0/1), and `!=`, `>`, `<=`, `>=` follow from them.
+// A type without them keeps the built-in `==` (identity for objects), and the
+// overloads compose: `List::sort` uses `<=`, `Map` finds keys with `==`.
+Vec = type {
+	x = 0
+	y = 0
+	::new = () -> Vec { return {} }
+	::== = (Vec a, Vec b) -> int { return a.x == b.x and a.y == b.y }
+	::< = (Vec a, Vec b) -> int { return a.x < b.x or (a.x == b.x and a.y < b.y) }
+}
+Vec a = {
+	x = 1
+	y = 2
+}
+Vec b = {
+	x = 1
+	y = 2
+}
+Vec c = {
+	x = 9
+	y = 0
+}
+print("${a == b} ${a != b} ${a == c}\n")
+print("${a < c} ${a > c} ${a <= b} ${a >= b}\n")
+
+// `List::sort` compares with `<=`, `Map` finds keys with `==`.
+l = List<Vec>()
+l.push(c)
+l.push(a)
+l.sort()
+print("${l.at(0).x} ${l.at(1).x}\n")
+m = Map<Vec, int>()
+m.set(a, 7)
+print("${m.get(b, 0)}\n")
+
+// A `switch` case compares with `==` too.
+switch a {
+	case b { print("eq\n") }
+	default { print("ne\n") }
+}
+
+// Without `::==`, objects keep identity comparison.
+Point = type {
+	v = 0
+}
+Point p1 = { v = 1 }
+Point p2 = { v = 1 }
+print("${p1 == p2}\n")
+
+// The overloads compose through generics: `Box<Vec>` compares its `Vec`s.
+Box = type<T> {
+	value = T()
+	::== = (Box a, Box b) -> int { return a.value == b.value }
+}
+Box<Vec> ba = { value = a }
+Box<Vec> bb = { value = b }
+print("${ba == bb}\n")

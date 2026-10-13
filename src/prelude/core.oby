@@ -38,6 +38,7 @@ uint64::new = extern uint64_from_int64(int64 n) -> uint64
 use "io.oby"
 use "String.oby"
 use "File.oby"
+use "Socket.oby"
 use "Terminal.oby"
 use "Time.oby"
 use "Input.oby"

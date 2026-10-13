@@ -211,13 +211,12 @@ static int buf_append(char **buf, size_t *len, size_t *cap, const void *src, siz
    Not cleared by later successes, like C's errno. */
 static int g_last_error;
 
-/* Report a failure: record errno for `io_last_error` and return -1 / null. */
-static Value io_fail(void) {
+Value io_fail(void) {
     g_last_error = errno;
     return val_int(-1);
 }
 
-static Value io_fail_null(void) {
+Value io_fail_null(void) {
     g_last_error = errno;
     return val_null();
 }

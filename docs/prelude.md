@@ -228,6 +228,41 @@ text = read_file("out.txt")
 if text == null { print("missing\n") }
 ```
 
+### `Socket.oby`
+
+TCP sockets on top of `io`: a socket is a file descriptor, so `read`/`write`/
+`io::close` work on it unchanged, and this type is the ergonomic wrapper the way
+`File` is for files. A failed connect or listen produces a closed `Socket`
+(`fd == -1`), and `io::last_error()` says why. The `net::` natives underneath
+(`net::connect`, `net::listen`, `net::accept`, `net::local_port`,
+`net::resolve`, `net::set_nonblocking`, `net::poll`) take and return descriptors,
+so they can be used directly.
+
+| Definition | Meaning |
+|------------|---------|
+| `Socket::connect(String host, int port) -> Socket` | a connected socket; `""` is the local machine |
+| `Socket::listen(String host, int port) -> Socket` | a listening socket (backlog 16); `""` is any interface, port 0 picks a free one |
+| `Socket::local_port(Socket) -> int` | the port it is bound to |
+| `Socket::resolve(String host) -> String` | the first address, as text; `null` when it does not resolve |
+| `Socket::accept(Socket) -> Socket` | the next client of a listener |
+| `Socket::is_open(Socket) -> int` | `1` while the descriptor is valid |
+| `Socket::read(Socket, int count) -> String` | the io reads, on the socket (`::read_bytes`, `::read_line`, `::read_all`) |
+| `Socket::write(Socket, String) -> int` | bytes written (`::write_bytes(Socket, byte[], int)`) |
+| `Socket::poll(Socket, int timeout_ms) -> int` | `1` readable, `0` on timeout, `-1` on error |
+| `Socket::set_nonblocking(Socket, int on) -> int` | so a game loop need not block |
+| `Socket::close(Socket)` | closes and marks it closed |
+
+```
+srv = Socket::listen("", 0)
+print("on port ${srv.local_port()}\n")
+cli = Socket::connect("127.0.0.1", srv.local_port())
+peer = srv.accept()
+cli.write("ping\n")
+print(peer.read_line())
+```
+
+TLS is not part of this: the layer is plaintext TCP.
+
 ### `Terminal.oby`
 
 ```

@@ -21,7 +21,7 @@
 #include "vm/image.h"
 #include "vm/vm.h"
 
-const char *oby_version_str = "0.6.3";
+const char *oby_version_str = "0.6.4";
 
 /* Command-line options. */
 typedef struct {

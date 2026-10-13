@@ -1,0 +1,27 @@
+// A socket is a file descriptor: listen, connect to ourselves, accept, and the
+// data path is the ordinary io read/write. One script can do all of it in
+// order, because the connect completes before the accept is reached.
+Socket srv = Socket::listen("127.0.0.1", 0)
+print("listening: ${srv.is_open()}\n")
+Socket cli = Socket::connect("127.0.0.1", srv.local_port())
+Socket peer = srv.accept()
+print("accepted: ${peer.is_open()}\n")
+
+cli.write("ping\n")
+print("echo: ${peer.read_line()}\n")
+peer.write("pong\n")
+print("back: ${cli.read_line()}\n")
+
+// `poll` says when a socket is readable, so a game loop need not block.
+cli.set_nonblocking(1)
+print("poll (idle): ${cli.poll(0)}\n")
+peer.write("late\n")
+print("poll (data): ${cli.poll(1000)}\n")
+print("late: ${cli.read_line()}\n")
+
+print("resolve: ${Socket::resolve("127.0.0.1")}\n")
+
+cli.close()
+peer.close()
+srv.close()
+print("closed: ${cli.is_open()} ${srv.is_open()}\n")

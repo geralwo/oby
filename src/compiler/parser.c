@@ -812,14 +812,24 @@ static ASTNode *parse_stmt(Parser *p) {
     if (check(p, TOKEN_COLON_COLON)) {
         Token t = p->current;
         advance(p);
-        if (!check(p, TOKEN_IDENTIFIER)) {
-            diag_error(p->diag, p->current, "expected a name after '::', found %s",
-                       token_kind_name(p->current.kind));
+        Token name = p->current;
+        if (name.kind == TOKEN_EQUAL_EQUAL || name.kind == TOKEN_LT) {
+            /* The comparison members: `::==` and `::<`. */
+            advance(p);
+        } else if (name.kind == TOKEN_BANG_EQUAL || name.kind == TOKEN_GT ||
+                   name.kind == TOKEN_LESS_EQUAL || name.kind == TOKEN_GREATER_EQUAL) {
+            diag_error(p->diag, name,
+                       "define '::==' and '::<'; the other comparisons follow from them");
+            p->had_error = true;
+            return NULL;
+        } else if (name.kind == TOKEN_IDENTIFIER) {
+            advance(p);
+        } else {
+            diag_error(p->diag, name, "expected a name after '::', found %s",
+                       token_kind_name(name.kind));
             p->had_error = true;
             return NULL;
         }
-        Token name = p->current;
-        advance(p);
         if (!match(p, TOKEN_EQUAL)) {
             diag_error(p->diag, p->current,
                        "expected '=' after static member name (to reference a static "

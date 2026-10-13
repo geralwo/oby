@@ -1038,8 +1038,26 @@ prelude type like `vec2i`, or an earlier one of your own — is an error
   inline storage, so they cannot cross into tagged storage (object fields,
   natives, string interpolation) yet — that is an error, not a silent copy.
 - **Comparisons** yield `int`. `==` and `!=` work on any two values of the same
-  type; packed values compare by their bytes. `<`, `>`, `<=`, `>=` need an
-  ordered type (numbers, strings) — ordering packed values is an error.
+  type; packed values compare by their bytes, and objects compare by identity.
+  `<`, `>`, `<=`, `>=` need an ordered type (numbers, strings) — ordering packed
+  values is an error.
+- **A nominal type can define its own comparisons**: `::==` and `::<` take two of
+  the type and return `int` (0/1), and the other four operators follow from them
+  (`a != b` is `not T::==(a, b)`, `a > b` is `T::<(b, a)`, and so on). They apply
+  when both operands have that type, so `List::sort` (which uses `<=`), `Map`
+  keys (which use `==`) and `switch` cases all follow the type's own rule:
+
+  ```
+  Vec = type {
+  	x = 0
+  	y = 0
+  	::== = (Vec a, Vec b) -> int { return a.x == b.x and a.y == b.y }
+  	::< = (Vec a, Vec b) -> int { return a.x < b.x or (a.x == b.x and a.y < b.y) }
+  }
+  ```
+
+  A type without them keeps the built-in `==` (identity for objects), and a type
+  with `::==` but no `::<` cannot be ordered.
 - **Null:** `null` is assignable to any tagged type and to nothing else, and a
   `null` literal cannot determine an inferred type. See §4.6.
 
@@ -1099,6 +1117,9 @@ The rest of the prelude (see `prelude.md`):
   `rename`, `mkdir`, `read_dir`, ...).
 - `File.oby` — `File` handles (`open_read`, `open_append`, `read_line`, ...)
   and the `read_file`/`write_file` helpers.
+- `Socket.oby` — TCP sockets (`Socket::connect`, `Socket::listen`, `accept`,
+  `poll`, `set_nonblocking`) over the `net::` natives; a socket is a descriptor,
+  so the `io` reads and writes work on it unchanged. Plaintext TCP only.
 - `Terminal.oby` — terminal modes (raw mode, mouse reporting, `restore`), size,
   colours, cursor movement, and printing.
 - `Input.oby` — the polled key set, key modifiers, ordered typed text, and

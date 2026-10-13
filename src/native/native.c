@@ -1,6 +1,7 @@
 #include <string.h>
 #include "native/native.h"
 #include "native/io.h"
+#include "native/net.h"
 #include "native/strings.h"
 #include "native/memory.h"
 #include "native/terminal.h"
@@ -60,6 +61,7 @@ Value native_call(int id, Value *args, int argc) {
 void native_register_std(void) {
     native_init();
     io_register_natives();
+    net_register_natives();
     numbers_register_natives();
     strings_register_natives();
     memory_register_natives();

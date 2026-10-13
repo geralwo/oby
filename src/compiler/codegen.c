@@ -1320,15 +1320,30 @@ static void gen_stmt(Codegen *cg, ASTNode *node) {
                 } else {
                     size_t cv = reg_alloc(cg, csize);
                     gen_expr_as(cg, v, cv, ct);
-                    size_t eq = reg_alloc(cg, type_size(it));
-                    if (packed)
-                        emit(cg, INSTR_ABCN(OP_EQPACKED, eq, sv, cv, (int)csize));
-                    else
-                        emit(cg, INSTR_ABCN(OP_EQ, eq, sv, cv, kind));
-                    jump_unless(cg, eq, KIND_INT32, misses);
-                    /* Free only what this case allocated: the scrutinee's slot
-                       is still in use. */
-                    reg_free(cg, csize + type_size(it));
+                    if (c->sym) {
+                        /* The type defines `::==`: compare through it, so a
+                           switch case agrees with `==` (sema resolved it). */
+                        size_t base = reg_alloc(cg, VSLOT);
+                        size_t a0 = reg_alloc(cg, VSLOT);
+                        size_t a1 = reg_alloc(cg, VSLOT);
+                        gen_symbol_to(cg, c->sym, base);
+                        emit(cg, INSTR_ABC(OP_MOVE, a0, sv, 0));
+                        emit(cg, INSTR_ABC(OP_MOVE, a1, cv, 0));
+                        emit(cg, INSTR_ABC(OP_CALL, base, 2, 1));
+                        jump_unless(cg, base, KIND_INT32, misses);
+                        reg_free(cg, VSLOT * 3);
+                        reg_free(cg, csize);
+                    } else {
+                        size_t eq = reg_alloc(cg, type_size(it));
+                        if (packed)
+                            emit(cg, INSTR_ABCN(OP_EQPACKED, eq, sv, cv, (int)csize));
+                        else
+                            emit(cg, INSTR_ABCN(OP_EQ, eq, sv, cv, kind));
+                        jump_unless(cg, eq, KIND_INT32, misses);
+                        /* Free only what this case allocated: the scrutinee's
+                           slot is still in use. */
+                        reg_free(cg, csize + type_size(it));
+                    }
                 }
 
                 /* A guard is one more condition the case must satisfy. */
