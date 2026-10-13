@@ -1,0 +1,267 @@
+==================
+A type with members
+==================
+
+Point = type {
+	x = 0
+	::count = 3
+	move = (int dx) -> void { x += dx }
+}
+
+---
+
+(source_file
+  (assignment
+    (identifier)
+    (type_literal
+      (table_literal
+        (assignment
+          (identifier)
+          (number))
+        (static_member
+          (identifier)
+          (number))
+        (assignment
+          (identifier)
+          (function_literal
+            (parameter
+              (identifier)
+              (identifier))
+            (identifier)
+            (block
+              (compound_assignment
+                (identifier)
+                (compound_operator)
+                (identifier)))))))))
+
+==================
+An enum and a switch
+==================
+
+Color = enum {
+	RED = 1
+	GREEN
+}
+
+name = (Color c) -> String {
+	switch c {
+	case Color::RED { return "red" }
+	case Color::GREEN if seen { return "green" }
+	default { return "?" }
+	}
+}
+
+---
+
+(source_file
+  (assignment
+    (identifier)
+    (enum_literal
+      (enum_item
+        (identifier)
+        (number))
+      (enum_item
+        (identifier))))
+  (assignment
+    (identifier)
+    (function_literal
+      (parameter
+        (identifier)
+        (identifier))
+      (identifier)
+      (block
+        (switch_statement
+          (identifier)
+          (switch_case
+            (member_expression
+              (identifier)
+              (identifier))
+            (block
+              (return_statement
+                (string))))
+          (switch_case
+            (member_expression
+              (identifier)
+              (identifier))
+            (identifier)
+            (block
+              (return_statement
+                (string))))
+          (switch_default
+            (block
+              (return_statement
+                (string)))))))))
+
+==================
+Expressions and strings
+==================
+
+xs = [1, 2, 3]
+heap = T[4]
+m = {
+	a = 1
+	b = 2
+}
+s = "n = ${m.get("a", 0) + 1}"
+b = i < 5 and not done
+first = xs[0]
+y = xs.pop()
+fn = (int a, int b) -> int { return a + b }
+
+---
+
+(source_file
+  (assignment
+    (identifier)
+    (array_literal
+      (number)
+      (number)
+      (number)))
+  (assignment
+    (identifier)
+    (array_type
+      (identifier)
+      (number)))
+  (assignment
+    (identifier)
+    (table_literal
+      (assignment
+        (identifier)
+        (number))
+      (assignment
+        (identifier)
+        (number))))
+  (assignment
+    (identifier)
+    (string
+      (interpolation
+        (binary_expression
+          (call_expression
+            (member_expression
+              (identifier)
+              (identifier))
+            (string)
+            (number))
+          (number)))))
+  (assignment
+    (identifier)
+    (binary_expression
+      (binary_expression
+        (identifier)
+        (number))
+      (unary_expression
+        (identifier))))
+  (assignment
+    (identifier)
+    (array_type
+      (identifier)
+      (number)))
+  (assignment
+    (identifier)
+    (call_expression
+      (member_expression
+        (identifier)
+        (identifier))))
+  (assignment
+    (identifier)
+    (function_literal
+      (parameter
+        (identifier)
+        (identifier))
+      (parameter
+        (identifier)
+        (identifier))
+      (identifier)
+      (block
+        (return_statement
+          (binary_expression
+            (identifier)
+            (identifier)))))))
+
+==================
+Generics and externs
+==================
+
+Box = type<T> {
+	items = T[] {}
+
+	push = (T x) { items.push(x) }
+	map = <U>((T) -> U f) -> Box<U> { return Box<U>() }
+}
+
+nested = Map<String, List<int>>
+inner = Box<int>()
+free = extern ob_free(object o) -> void
+
+---
+
+(source_file
+  (assignment
+    (identifier)
+    (type_literal
+      (type_parameters
+        (identifier))
+      (table_literal
+        (assignment
+          (identifier)
+          (array_type
+            (identifier)))
+        (table_literal)
+        (assignment
+          (identifier)
+          (function_literal
+            (parameter
+              (identifier)
+              (identifier))
+            (block
+              (call_expression
+                (member_expression
+                  (identifier)
+                  (identifier))
+                (identifier)))))
+        (assignment
+          (identifier)
+          (function_literal
+            (type_parameters
+              (identifier))
+            (parameter
+              (function_type
+                (identifier)
+                (identifier))
+              (identifier))
+            (generic_expression
+              (identifier)
+              (type_arguments
+                (identifier)))
+            (block
+              (return_statement
+                (call_expression
+                  (generic_expression
+                    (identifier)
+                    (type_arguments
+                      (identifier)))))))))))
+  (assignment
+    (identifier)
+    (generic_expression
+      (identifier)
+      (type_arguments
+        (identifier)
+        (generic_expression
+          (identifier)
+          (type_arguments
+            (identifier))))))
+  (assignment
+    (identifier)
+    (call_expression
+      (generic_expression
+        (identifier)
+        (type_arguments
+          (identifier)))))
+  (assignment
+    (identifier)
+    (extern_definition
+      (identifier)
+      (parameter
+        (identifier)
+        (identifier))
+      (identifier))))

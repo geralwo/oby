@@ -1,0 +1,37 @@
+{
+  "name": "tree-sitter-oby",
+  "version": "0.1.0",
+  "description": "OBY grammar for tree-sitter",
+  "keywords": [
+    "tree-sitter",
+    "parser",
+    "oby"
+  ],
+  "license": "MIT",
+  "main": "bindings/node",
+  "files": [
+    "grammar.js",
+    "queries",
+    "src"
+  ],
+  "tree-sitter": [
+    {
+      "scope": "source.oby",
+      "file-types": [
+        "oby"
+      ],
+      "highlights": [
+        "queries/highlights.scm"
+      ],
+      "brackets": [
+        "queries/brackets.scm"
+      ],
+      "indents": [
+        "queries/indents.scm"
+      ]
+    }
+  ],
+  "devDependencies": {
+    "tree-sitter-cli": "^0.27.1"
+  }
+}
