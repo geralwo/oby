@@ -1,9 +1,11 @@
+#include <ctype.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 
+#include "core/embed.h"
 #include "core/json_error.h"
 #include "core/version.h"
 #include "compiler/frontend.h"
@@ -26,6 +28,7 @@ typedef struct LspDocument {
     char *source;         /* borrowed from `fe`: the buffer its tokens point into */
     size_t source_len;
     Frontend fe;          /* the checked program; its diag captures diagnostics */
+    Array *published;     /* char* URIs this document last published for */
     struct LspDocument *next;
 } LspDocument;
 
@@ -186,6 +189,11 @@ static void doc_free(LspDocument *doc) {
     frontend_free(&doc->fe);   /* frees the source buffer too */
     free(doc->uri);
     free(doc->path);
+    if (doc->published) {
+        for (size_t i = 0; i < array_length(doc->published); i++)
+            free(*(char **)array_get(doc->published, i));
+        array_free(doc->published);
+    }
     free(doc);
 }
 
@@ -274,14 +282,12 @@ static void doc_check(LspDocument *doc, const char *text) {
     doc->source_len = doc->source ? strlen(doc->source) : 0;
 }
 
-/* Publish one document's diagnostics. `doc` NULL publishes the empty list,
-   which is how a closed document's squigglies are cleared. v1 publishes the
-   entry document's own diagnostics only: an imported file — and the embedded
-   prelude — gets its pass when it is opened itself. */
-static void send_diagnostics(LspServer *s, const char *uri, LspDocument *doc) {
-    const char *label = doc ? doc_label(doc) : NULL;
-    Array *entries = doc ? doc->fe.diag.entries : NULL;
-
+/* Publish one file's diagnostics against `uri`. `entries` NULL publishes the
+   empty list, which is how a closed document's squigglies are cleared. Only
+   entries whose `file` is `label` are included. */
+static void publish_diagnostics(LspServer *s, const char *uri,
+                                const char *source, size_t source_len,
+                                Array *entries, const char *label) {
     JsonBuf b;
     json_buf_init(&b);
     json_buf_printf(&b,
@@ -298,14 +304,14 @@ static void send_diagnostics(LspServer *s, const char *uri, LspDocument *doc) {
         /* The captured line and column are 1-based byte positions; the
            protocol wants zero-based positions in the negotiated encoding.
            Zero-length tokens get a 1-byte span so a caret can render. */
-        size_t start = lsp_line_start(doc->source, doc->source_len, e->line - 1);
+        size_t start = lsp_line_start(source, source_len, e->line - 1);
         if (e->column > 0) start += (size_t)(e->column - 1);
-        if (start > doc->source_len) start = doc->source_len;
+        if (start > source_len) start = source_len;
         size_t end = start + (e->length > 0 ? e->length : 1);
-        if (end > doc->source_len) end = doc->source_len;
+        if (end > source_len) end = source_len;
 
-        LspPosition at = lsp_position_of(doc->source, doc->source_len, start, s->encoding);
-        LspPosition to = lsp_position_of(doc->source, doc->source_len, end, s->encoding);
+        LspPosition at = lsp_position_of(source, source_len, start, s->encoding);
+        LspPosition to = lsp_position_of(source, source_len, end, s->encoding);
 
         json_buf_printf(&b,
                         "%s{\"range\":{\"start\":{\"line\":%d,\"character\":%d},"
@@ -321,6 +327,152 @@ static void send_diagnostics(LspServer *s, const char *uri, LspDocument *doc) {
 
     if (!b.oom) frame_write(s->out, b.data);
     json_buf_free(&b);
+}
+
+/* Is a document open for this path? An open import is checked on its own, so
+   its buffer — not the disk copy this check read — is the truth. */
+static bool doc_open_for_path(LspServer *s, const char *path) {
+    for (LspDocument *doc = s->docs; doc; doc = doc->next) {
+        if (doc->path && strcmp(doc->path, path) == 0) return true;
+    }
+    return false;
+}
+
+/* The client's spelling of a server path, when the two sides write a drive
+   differently: a Windows client's `file:///c%3A/…` URI decodes to `/c:/…`
+   here while the file is really at `/mnt/c/…`. `from` is the document that
+   asked — its own URI and path disagree in exactly that way, and the URI's
+   prefix is the template. False when `from` did not go through that
+   translation, or `path` is not on the same drive. */
+static bool client_uri_for_path(LspDocument *from, const char *path,
+                                char *buf, size_t cap) {
+    if (!from || !from->path || !from->uri) return false;
+
+    char decoded[4096];
+    if (!uri_to_path(from->uri, decoded, sizeof decoded)) return false;
+
+    /* `/mnt/c/…` here, `/c:/…` there, the same drive letter. */
+    if (strlen(from->path) < 7 || strncmp(from->path, "/mnt/", 5) != 0 ||
+        from->path[6] != '/')
+        return false;
+    if (strlen(decoded) < 4 || decoded[0] != '/' || decoded[2] != ':' ||
+        decoded[3] != '/')
+        return false;
+    char drive = from->path[5];
+    if (tolower((unsigned char)decoded[1]) != tolower((unsigned char)drive)) return false;
+
+    /* Everything after the drive is spelled the same on both sides, so the
+       URI's prefix before it (`file:///c%3A`) is the template for the rest. */
+    const char *rest = from->path + 6;
+    size_t rest_len = strlen(rest);
+    size_t uri_len = strlen(from->uri);
+    if (uri_len <= rest_len || strcmp(from->uri + uri_len - rest_len, rest) != 0)
+        return false;
+    size_t prefix_len = uri_len - rest_len;
+
+    if (strlen(path) < 7 || strncmp(path, "/mnt/", 5) != 0 || path[6] != '/' ||
+        tolower((unsigned char)path[5]) != tolower((unsigned char)drive))
+        return false;
+
+    size_t tail_len = strlen(path + 6);
+    if (prefix_len + tail_len >= cap) return false;
+    memcpy(buf, from->uri, prefix_len);
+    memcpy(buf + prefix_len, path + 6, tail_len + 1);
+    return true;
+}
+
+/* The URI a client knows a file by: the exact spelling of an open document
+   that has this path, else the client's spelling of the path. */
+static bool uri_for_file(LspServer *s, LspDocument *from, const char *path,
+                         char *buf, size_t cap) {
+    for (LspDocument *doc = s->docs; doc; doc = doc->next) {
+        if (doc->path && strcmp(doc->path, path) == 0) {
+            if (strlen(doc->uri) >= cap) return false;
+            strcpy(buf, doc->uri);
+            return true;
+        }
+    }
+    if (client_uri_for_path(from, path, buf, cap)) return true;
+    return path_to_uri(path, buf, cap);
+}
+
+/* Does any captured diagnostic belong to `file`? */
+static bool file_has_entries(Array *entries, const char *file) {
+    for (size_t i = 0; entries && i < array_length(entries); i++) {
+        DiagEntry *e = (DiagEntry *)array_get(entries, i);
+        if (e->file && strcmp(e->file, file) == 0) return true;
+    }
+    return false;
+}
+
+/* Is `uri` in `list`? */
+static bool uri_in(Array *list, const char *uri) {
+    for (size_t i = 0; list && i < array_length(list); i++) {
+        if (strcmp(*(char **)array_get(list, i), uri) == 0) return true;
+    }
+    return false;
+}
+
+/* Publish diagnostics for every file this document's check covered: the
+   document itself, plus each import it pulled in. An import the client has
+   open is skipped — its own check is the truth. An import with nothing to say
+   is published only when it had something before, so its squigglies go away
+   without an empty frame on every keystroke. `clear` publishes the empty list
+   for everything, which is how a closing document's squigglies go away. The
+   embedded prelude is skipped: it is not a file the client can open. */
+static void report_diagnostics(LspServer *s, LspDocument *doc, bool clear) {
+    const char *label = doc_label(doc);
+    Array *units = doc->fe.sema.programs;
+
+    /* A parse error stops before sema, so there are no units: the entry's own
+       diagnostics are all there is. */
+    if (!units || array_length(units) == 0) {
+        publish_diagnostics(s, doc->uri, doc->source, doc->source_len,
+                            clear ? NULL : doc->fe.diag.entries, label);
+        return;
+    }
+
+    Array *now = array_new(sizeof(char *));
+    if (!now) return;
+
+    for (size_t i = 0; i < array_length(units); i++) {
+        ProgramUnit *u = *(ProgramUnit **)array_get(units, i);
+        if (embed_lookup(u->file)) continue;
+
+        bool is_entry = strcmp(u->file, label) == 0;
+        if (!is_entry && doc_open_for_path(s, u->file)) continue;
+
+        char uri[4096];
+        if (is_entry) {
+            snprintf(uri, sizeof uri, "%s", doc->uri);
+        } else if (!uri_for_file(s, doc, u->file, uri, sizeof uri)) {
+            continue;
+        }
+
+        /* An import with nothing to say is published only when it had
+           something before, so its squigglies go away. */
+        if (!clear && !is_entry && !uri_in(doc->published, uri) &&
+            !file_has_entries(doc->fe.diag.entries, u->file))
+            continue;
+
+        publish_diagnostics(s, uri, u->source, strlen(u->source),
+                            clear ? NULL : doc->fe.diag.entries, u->file);
+
+        char *copy = copy_string(uri);
+        if (copy) array_push(now, &copy);
+    }
+
+    /* A file that dropped out of the check — an import removed, say — is
+       cleared. */
+    for (size_t i = 0; doc->published && i < array_length(doc->published); i++) {
+        char *old = *(char **)array_get(doc->published, i);
+        if (!uri_in(now, old)) publish_diagnostics(s, old, NULL, 0, NULL, NULL);
+    }
+
+    for (size_t i = 0; doc->published && i < array_length(doc->published); i++)
+        free(*(char **)array_get(doc->published, i));
+    if (doc->published) array_free(doc->published);
+    doc->published = now;
 }
 
 static void doc_open(LspServer *s, JValue *params) {
@@ -350,7 +502,7 @@ static void doc_open(LspServer *s, JValue *params) {
     s->docs = doc;
 
     doc_check(doc, text);
-    send_diagnostics(s, doc->uri, doc);
+    report_diagnostics(s, doc, false);
 }
 
 static void doc_change(LspServer *s, JValue *params) {
@@ -379,7 +531,7 @@ static void doc_change(LspServer *s, JValue *params) {
     doc->version = version;
 
     doc_check(doc, text);
-    send_diagnostics(s, doc->uri, doc);
+    report_diagnostics(s, doc, false);
 }
 
 static void doc_close(LspServer *s, JValue *params) {
@@ -388,7 +540,9 @@ static void doc_close(LspServer *s, JValue *params) {
     if (!uri) return;
     /* Clearing on close is the spec's rule for a single-file language: with
        the buffer gone the disk file is the truth, and it may differ. */
-    send_diagnostics(s, uri, NULL);
+    LspDocument *doc = doc_find(s, uri);
+    if (doc) report_diagnostics(s, doc, true);
+    else publish_diagnostics(s, uri, NULL, 0, NULL, NULL);
     doc_remove(s, uri);
 }
 
@@ -495,6 +649,17 @@ static void handle_hover(LspServer *s, const char *id, size_t id_len,
     json_buf_free(&b);
 }
 
+/* The program unit whose source buffer holds `tok`, or NULL. A declaration in
+   an import points into that file's buffer, not this document's. */
+static ProgramUnit *unit_for_token(Frontend *fe, Token tok) {
+    Array *units = fe->sema.programs;
+    for (size_t i = 0; units && i < array_length(units); i++) {
+        ProgramUnit *u = *(ProgramUnit **)array_get(units, i);
+        if (lsp_token_in_source(u->source, strlen(u->source), tok)) return u;
+    }
+    return NULL;
+}
+
 static void handle_definition(LspServer *s, const char *id, size_t id_len,
                               JValue *params) {
     LspDocument *doc = NULL;
@@ -506,24 +671,44 @@ static void handle_definition(LspServer *s, const char *id, size_t id_len,
 
     Token tok;
     LspTarget target = target_at(doc, offset);
-    /* Same-file only: the bounds check refuses tokens from imports and the
-       prelude, so the jump never leaves the document. */
-    if (!lsp_target_decl_token(&target, &tok) ||
-        !lsp_token_in_source(doc->source, doc->source_len, tok)) {
+    if (!lsp_target_decl_token(&target, &tok)) {
         send_result(s, id, id_len, "null");
         return;
     }
 
-    size_t start = (size_t)(tok.start - doc->source);
+    /* The declaration's file: this document, or an import it pulled in. The
+       embedded prelude is not a file the client can open, so it is refused. */
+    const char *source;
+    size_t source_len;
+    char uri[4096];
+    if (lsp_token_in_source(doc->source, doc->source_len, tok)) {
+        source = doc->source;
+        source_len = doc->source_len;
+        snprintf(uri, sizeof uri, "%s", doc->uri);
+    } else {
+        ProgramUnit *unit = unit_for_token(&doc->fe, tok);
+        if (!unit || embed_lookup(unit->file)) {
+            send_result(s, id, id_len, "null");
+            return;
+        }
+        source = unit->source;
+        source_len = strlen(unit->source);
+        if (!uri_for_file(s, doc, unit->file, uri, sizeof uri)) {
+            send_result(s, id, id_len, "null");
+            return;
+        }
+    }
+
+    size_t start = (size_t)(tok.start - source);
     size_t end = start + (tok.length > 0 ? tok.length : 1);
-    if (end > doc->source_len) end = doc->source_len;
-    LspPosition at = lsp_position_of(doc->source, doc->source_len, start, s->encoding);
-    LspPosition to = lsp_position_of(doc->source, doc->source_len, end, s->encoding);
+    if (end > source_len) end = source_len;
+    LspPosition at = lsp_position_of(source, source_len, start, s->encoding);
+    LspPosition to = lsp_position_of(source, source_len, end, s->encoding);
 
     JsonBuf b;
     json_buf_init(&b);
     json_buf_printf(&b, "{\"uri\":\"");
-    json_buf_escape(&b, doc->uri);
+    json_buf_escape(&b, uri);
     json_buf_printf(&b,
                     "\",\"range\":{\"start\":{\"line\":%d,\"character\":%d},"
                     "\"end\":{\"line\":%d,\"character\":%d}}}",

@@ -1,6 +1,9 @@
+#define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include "core/array.h"
 #include "core/version.h"
@@ -103,6 +106,29 @@ static void expect_contains(Array *frames, size_t i, const char *needle, const c
                what, needle, got ? got : "(no frame)");
         failures++;
     }
+}
+
+/* Some frame (any position) contains `needle`. Used where the order of
+   published diagnostics is not the point. */
+static void expect_any_frame(Array *frames, const char *needle, const char *what) {
+    for (size_t i = 0; i < array_length(frames); i++) {
+        const char *got = frame_at(frames, i);
+        if (got && strstr(got, needle)) return;
+    }
+    printf("FAIL: %s (no frame contains '%s')\n", what, needle);
+    failures++;
+}
+
+/* Write `text` to `path`; the parent directory must exist. */
+static void write_file_at(const char *path, const char *text) {
+    FILE *f = fopen(path, "wb");
+    if (!f) {
+        printf("FAIL: cannot write %s\n", path);
+        failures++;
+        return;
+    }
+    fwrite(text, 1, strlen(text), f);
+    fclose(f);
 }
 
 int main(void) {
@@ -578,6 +604,72 @@ int main(void) {
         check(!lsp_token_in_source(text, 3, outside),
               "a token from another buffer is refused");
     }
+
+    /* ---- diagnostics for an imported file ---- */
+    {
+        const char *dir = "/tmp/oby_lsp_xfile";
+        mkdir(dir, 0755);
+        write_file_at("/tmp/oby_lsp_xfile/main.oby", "use \"lib.oby\"\nx = 1\n");
+        write_file_at("/tmp/oby_lsp_xfile/lib.oby", "y = nope\n");
+
+        Session s = {0};
+        session_add(&s, init_request);
+        session_add(&s, "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didOpen\",\"params\":"
+                        "{\"textDocument\":{\"uri\":\"file:///tmp/oby_lsp_xfile/main.oby\","
+                        "\"languageId\":\"oby\",\"version\":1,"
+                        "\"text\":\"use \\\"lib.oby\\\"\\nx = 1\\n\"}}}");
+        session_add(&s, "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"shutdown\"}");
+        session_add(&s, "{\"jsonrpc\":\"2.0\",\"method\":\"exit\"}");
+
+        Array *frames;
+        int status = run_session(&s, &frames);
+        check(status == 0, "the imported-diagnostics session shuts down cleanly");
+        expect_any_frame(frames, "\"uri\":\"file:///tmp/oby_lsp_xfile/lib.oby\"",
+                         "an import's diagnostics name its own URI");
+        expect_any_frame(frames, "unknown name 'nope'", "the import's error survives");
+        expect_any_frame(frames, "\"uri\":\"file:///tmp/oby_lsp_xfile/main.oby\"",
+                         "the entry is still published");
+        free_frames(frames);
+        free(s.data);
+    }
+
+    /* ---- a definition that lives in an imported file ---- */
+    {
+        const char *dir = "/tmp/oby_lsp_xfile";
+        mkdir(dir, 0755);
+        write_file_at("/tmp/oby_lsp_xfile/def_main.oby", "use \"def_lib.oby\"\nx = helper(1)\n");
+        write_file_at("/tmp/oby_lsp_xfile/def_lib.oby", "helper = (int a) -> int { return a }\n");
+
+        Session s = {0};
+        session_add(&s, init_request);
+        session_add(&s, "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didOpen\",\"params\":"
+                        "{\"textDocument\":{\"uri\":\"file:///tmp/oby_lsp_xfile/def_main.oby\","
+                        "\"languageId\":\"oby\",\"version\":1,"
+                        "\"text\":\"use \\\"def_lib.oby\\\"\\nx = helper(1)\\n\"}}}");
+        session_add(&s, "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"textDocument/definition\","
+                        "\"params\":{\"textDocument\":{\"uri\":\"file:///tmp/oby_lsp_xfile/def_main.oby\"},"
+                        "\"position\":{\"line\":1,\"character\":4}}}");
+        session_add(&s, "{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"shutdown\"}");
+        session_add(&s, "{\"jsonrpc\":\"2.0\",\"method\":\"exit\"}");
+
+        Array *frames;
+        int status = run_session(&s, &frames);
+        check(status == 0, "the cross-file definition session shuts down cleanly");
+        expect_any_frame(frames,
+                         "{\"jsonrpc\":\"2.0\",\"id\":5,\"result\":"
+                         "{\"uri\":\"file:///tmp/oby_lsp_xfile/def_lib.oby\",\"range\":{"
+                         "\"start\":{\"line\":0,\"character\":0},"
+                         "\"end\":{\"line\":0,\"character\":6}}}}",
+                         "definition jumps into the imported file");
+        free_frames(frames);
+        free(s.data);
+    }
+
+    remove("/tmp/oby_lsp_xfile/main.oby");
+    remove("/tmp/oby_lsp_xfile/lib.oby");
+    remove("/tmp/oby_lsp_xfile/def_main.oby");
+    remove("/tmp/oby_lsp_xfile/def_lib.oby");
+    rmdir("/tmp/oby_lsp_xfile");
 
     if (failures) {
         printf("%d failure(s)\n", failures);

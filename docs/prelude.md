@@ -10,6 +10,12 @@ prelude means rebuilding — the embedded copy shadows the file on disk.
 `OBY_PRELUDE_DIR` (default `src/prelude`, set in `compile.sh`) is both the
 table's path prefix and the fallback for a file the table does not have.
 
+`OBY_PRELUDE_SOURCE` overrides the table at run time: when it names a directory
+that holds `core.oby`, the prelude is loaded from there instead, so a prelude
+change takes effect without a rebuild. An editor's LSP configuration sets it so
+prelude files resolve to real paths the editor can open and navigate; the
+override is ignored when the directory has no `core.oby`.
+
 `core.oby` is the entry point. It `use`s whatever else it needs, so the prelude
 is one file plus its imports. Imports are pragma-once, and the whole prelude is
 typechecked like any other source — an error in it is reported with a

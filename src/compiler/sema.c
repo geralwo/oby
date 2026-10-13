@@ -899,9 +899,18 @@ static void load_use(Sema *s, ASTNode *use_node, const char *dir) {
 
 /* Load the prelude entry point, `core.oby`. It `use`s whatever else it needs,
    so the prelude is one file plus its imports. Always injected before the user
-   script. */
+   script.
+
+   The sources come from the embedded table by default. `OBY_PRELUDE_SOURCE`
+   names a directory to load them from instead — an editor's LSP configuration
+   sets it so prelude files resolve to real paths the editor can open and
+   navigate. The override is ignored when it does not hold `core.oby`. */
 static void load_prelude(Sema *s) {
-    char *path = path_normalize(s->arena, path_join(s->arena, OBY_PRELUDE_DIR, "core.oby"));
+    const char *root = OBY_PRELUDE_DIR;
+    const char *override = getenv("OBY_PRELUDE_SOURCE");
+    if (override && override[0] && source_exists(path_join(s->arena, override, "core.oby")))
+        root = override;
+    char *path = path_normalize(s->arena, path_join(s->arena, root, "core.oby"));
     Token tok;
     tok.kind = TOKEN_EOF;
     tok.start = path;

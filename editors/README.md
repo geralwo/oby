@@ -10,7 +10,7 @@ an install script for them.)
 |---|---|---|
 | Live diagnostics | `textDocument/publishDiagnostics` | On open, on every change; cleared on close |
 | Hover | `textDocument/hover` | The resolved type, as a fenced markdown block |
-| Go to definition | `textDocument/definition` | Declarations in the same file |
+| Go to definition | `textDocument/definition` | Declarations in this file or an import; the embedded prelude has no file to jump to |
 | Completion | `textDocument/completion` | Members after `.`, statics and enum constants after `::`, names elsewhere |
 | Document symbols | `textDocument/documentSymbol` | Outline: types, functions, globals; members and enum constants as children |
 
@@ -20,17 +20,17 @@ What the client needs to know:
   there is nothing incremental to configure.
 * **Position encoding** is negotiated (UTF-16 unless the client offers
   `utf-8`); nothing to set on either side.
-* **Diagnostics belong to the open document.** Errors inside a `use`d file (or
-  the prelude) are not published against another URI yet — open that file to
-  see them. A fix clears the squigglies on the next change, and closing the
-  buffer clears them for good.
-* **Definition stays inside the file**: it never jumps to another file or the
-  prelude.
+* **Diagnostics cover the imports too.** A check publishes the open document's
+  diagnostics and each `use`d file's against its own URI, so an error in an
+  import shows up without opening it. An import that is itself open is left to
+  its own check, and the embedded prelude is skipped — it has no file to open.
+* **Definition can leave the file**: it jumps into an import, and into the
+  prelude when the server was started with `OBY_PRELUDE_SOURCE` set (see
+  `editors/zed/README.md`).
 * **Completion works while typing**: `.` and `::` complete members and statics,
   and the text on the line does not have to parse.
 
-Not there yet: formatting, rename, find references, cross-file definitions,
-workspace symbols.
+Not there yet: formatting, rename, find references, workspace symbols.
 
 ## Check it by hand
 
@@ -127,4 +127,5 @@ cmd = { "wsl.exe", "-e", "/mnt/c/Users/user/oby/build/oby", "--lsp" },
 Paths: a Windows client sends Windows paths (`file:///c%3A/...`), which decode
 to `/c:/...` on the WSL side. The server prefers the `/mnt/c/...` spelling when
 that is where the document's directory actually is, so `use` imports resolve
-normally.
+normally — and a URI it hands back (a definition, an import's diagnostics) is
+spelled the way the client spells it, `file:///c%3A/...` again.
