@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 
 #include "core/json_error.h"
 #include "core/version.h"
@@ -208,6 +209,53 @@ static const char *doc_label(LspDocument *doc) {
     return doc->path ? doc->path : doc->uri;
 }
 
+/* Does this path name a directory? Imports resolve against a document's
+   directory, which is there even for a file the editor has not saved yet. */
+static bool dir_exists(const char *path) {
+    struct stat st;
+    if (stat(path, &st) != 0) return false;
+    return S_ISDIR(st.st_mode);
+}
+
+/* `path`'s directory, in `buf`. */
+static void parent_dir(const char *path, char *buf, size_t cap) {
+    snprintf(buf, cap, "%s", path);
+    char *slash = strrchr(buf, '/');
+    if (slash) *slash = '\0';
+    else buf[0] = '\0';
+}
+
+/* `/C:/Users/x` (how a Windows client's `file:///c%3A/…` URI decodes here)
+   names `/mnt/c/Users/x` when this side is WSL. False when the path is not a
+   drive path. */
+static bool wsl_drive_path(const char *path, char *buf, size_t cap) {
+    if (path[0] != '/' || path[1] == '\0' || path[2] != ':' || path[3] != '/') return false;
+    char drive = path[1];
+    if (drive >= 'A' && drive <= 'Z') drive = (char)(drive - 'A' + 'a');
+    if (drive < 'a' || drive > 'z') return false;
+    int n = snprintf(buf, cap, "/mnt/%c/%s", drive, path + 4);
+    return n > 0 && (size_t)n < cap;
+}
+
+/* The filesystem path a document's URI names on this side: the decoded URI,
+   or its WSL spelling when only that one has a directory here. */
+static char *document_path(const char *uri) {
+    char path[4096];
+    if (!uri_to_path(uri, path, sizeof path)) return NULL;
+
+    char dir[4096];
+    parent_dir(path, dir, sizeof dir);
+    if (!dir_exists(dir)) {
+        char translated[4096];
+        char translated_dir[4096];
+        if (wsl_drive_path(path, translated, sizeof translated)) {
+            parent_dir(translated, translated_dir, sizeof translated_dir);
+            if (dir_exists(translated_dir)) return copy_string(translated);
+        }
+    }
+    return copy_string(path);
+}
+
 /* Parse and typecheck `text` with capture on, replacing the previous run (its
    arena goes first, like the CLI's Frontend cycles). The frontend owns the
    source buffer from here on and `doc->source` borrows it: the AST's tokens
@@ -292,8 +340,7 @@ static void doc_open(LspServer *s, JValue *params) {
         return;
     }
 
-    char path[4096];
-    if (uri_to_path(uri, path, sizeof path)) doc->path = copy_string(path);
+    doc->path = document_path(uri);
 
     long long version = 0;
     jint(jmem(td, "version"), &version);
