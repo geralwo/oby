@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "core/json_error.h"
 #include "core/version.h"
 #include "compiler/frontend.h"
 #include "compiler/type.h"
@@ -10,6 +11,8 @@
 #include "lsp/query.h"
 #include "lsp/server.h"
 #include "lsp/uri.h"
+
+#include "json.h"   /* vendor/json.h — request parsing, public domain */
 
 /* An open document: the URI exactly as the client sent it (it goes back out
    verbatim), the path behind it when it is a file, and the editor's text. The
@@ -41,6 +44,99 @@ static char *copy_string(const char *s) {
     char *copy = (char *)malloc(len + 1);
     if (copy) memcpy(copy, s, len + 1);
     return copy;
+}
+
+/* ------------------------------------------------------------------ */
+/* Reading requests (vendor/json.h)                                   */
+/* ------------------------------------------------------------------ */
+
+typedef struct json_value_s JValue;
+
+/* The member `key` of an object value, or NULL. */
+static JValue *jmem(JValue *value, const char *key) {
+    struct json_object_s *object = value ? json_value_as_object(value) : NULL;
+    if (!object) return NULL;
+    for (struct json_object_element_s *e = object->start; e; e = e->next) {
+        if (e->name && strcmp(e->name->string, key) == 0) return e->value;
+    }
+    return NULL;
+}
+
+/* A string's bytes, or NULL. */
+static const char *jstr(JValue *value) {
+    struct json_string_s *s = value ? json_value_as_string(value) : NULL;
+    return s ? s->string : NULL;
+}
+
+/* An array, or NULL — json.h's `json_value_as_*` helpers dereference without a
+   NULL check, so every one goes through a guard like this. */
+static struct json_array_s *jarr(JValue *value) {
+    return value ? json_value_as_array(value) : NULL;
+}
+
+/* A boolean, when it is one. */
+static bool jbool(JValue *value, bool *out) {
+    if (!value) return false;
+    if (json_value_is_true(value)) {
+        *out = true;
+        return true;
+    }
+    if (json_value_is_false(value)) {
+        *out = false;
+        return true;
+    }
+    return false;
+}
+
+/* The value of a number that is an exact integer. */
+static bool jint(JValue *value, long long *out) {
+    struct json_number_s *number = value ? json_value_as_number(value) : NULL;
+    if (!number || number->number_size == 0 || number->number_size >= 32) return false;
+    char buf[32];
+    memcpy(buf, number->number, number->number_size);
+    buf[number->number_size] = '\0';
+    double d = strtod(buf, NULL);
+    long long i = (long long)d;
+    if ((double)i != d) return false;
+    *out = i;
+    return true;
+}
+
+/* The parsed body (one allocation; the caller frees it), or NULL with `note`
+   naming the failure and where it is. */
+static JValue *jparse(const char *body, size_t len, char *note, size_t cap) {
+    struct json_parse_result_s result;
+    memset(&result, 0, sizeof result);
+    JValue *root = json_parse_ex(body, len, json_parse_flags_default, NULL, NULL, &result);
+    if (!root) {
+        char message[128];
+        oby_json_error_message(message, sizeof message, result.error, result.error_offset,
+                               result.error_line_no, result.error_row_no + 1);
+        snprintf(note, cap, "invalid JSON: %s", message);
+    }
+    return root;
+}
+
+/* The request id to echo: a number keeps its source text; anything else is
+   written back out (a client correlates an id by value, not by bytes). */
+static void jid(JValue *value, JsonBuf *out) {
+    if (!value) {
+        json_buf_printf(out, "null");
+        return;
+    }
+    struct json_number_s *number = json_value_as_number(value);
+    if (number && number->number) {
+        json_buf_printf(out, "%.*s", (int)number->number_size, number->number);
+        return;
+    }
+    size_t len = 0;
+    char *text = (char *)json_write_minified(value, &len);
+    if (!text) {
+        json_buf_printf(out, "null");
+        return;
+    }
+    json_buf_printf(out, "%s", text);
+    free(text);
 }
 
 /* ------------------------------------------------------------------ */
@@ -179,10 +275,10 @@ static void send_diagnostics(LspServer *s, const char *uri, LspDocument *doc) {
     json_buf_free(&b);
 }
 
-static void doc_open(LspServer *s, const JsonValue *params) {
-    const JsonValue *td = json_get(params, "textDocument");
-    const char *uri = json_string(json_get(td, "uri"));
-    const char *text = json_string(json_get(td, "text"));
+static void doc_open(LspServer *s, JValue *params) {
+    JValue *td = jmem(params, "textDocument");
+    const char *uri = jstr(jmem(td, "uri"));
+    const char *text = jstr(jmem(td, "text"));
     if (!uri || !text) return;   /* a malformed notification is dropped */
 
     /* A re-open without a close starts fresh. */
@@ -200,7 +296,7 @@ static void doc_open(LspServer *s, const JsonValue *params) {
     if (uri_to_path(uri, path, sizeof path)) doc->path = copy_string(path);
 
     long long version = 0;
-    json_int(json_get(td, "version"), &version);
+    jint(jmem(td, "version"), &version);
     doc->version = version;
 
     doc->next = s->docs;
@@ -210,39 +306,38 @@ static void doc_open(LspServer *s, const JsonValue *params) {
     send_diagnostics(s, doc->uri, doc);
 }
 
-static void doc_change(LspServer *s, const JsonValue *params) {
-    const JsonValue *td = json_get(params, "textDocument");
-    const char *uri = json_string(json_get(td, "uri"));
+static void doc_change(LspServer *s, JValue *params) {
+    JValue *td = jmem(params, "textDocument");
+    const char *uri = jstr(jmem(td, "uri"));
     if (!uri) return;
     LspDocument *doc = doc_find(s, uri);
     if (!doc) return;   /* changes only arrive for open documents */
 
-    const JsonValue *changes = json_get(params, "contentChanges");
-    if (!changes || changes->kind != JSON_ARRAY || array_length(changes->items) == 0) return;
+    struct json_array_s *changes = jarr(jmem(params, "contentChanges"));
+    if (!changes || changes->length == 0) return;
 
     /* We advertise Full sync, so an event is the whole document. A ranged
        edit here would silently go unapplied; drop the change instead. */
-    const JsonValue *last = NULL;
-    for (size_t i = 0; i < array_length(changes->items); i++) {
-        const JsonValue *event = *(JsonValue **)array_get(changes->items, i);
-        if (json_get(event, "range")) return;
-        last = event;
+    JValue *last = NULL;
+    for (struct json_array_element_s *e = changes->start; e; e = e->next) {
+        if (jmem(e->value, "range")) return;
+        last = e->value;
     }
-    const char *text = json_string(json_get(last, "text"));
+    const char *text = jstr(jmem(last, "text"));
     if (!text) return;
 
     /* The spec: this version is the one after all the changes in the list. */
     long long version = doc->version;
-    json_int(json_get(td, "version"), &version);
+    jint(jmem(td, "version"), &version);
     doc->version = version;
 
     doc_check(doc, text);
     send_diagnostics(s, doc->uri, doc);
 }
 
-static void doc_close(LspServer *s, const JsonValue *params) {
-    const JsonValue *td = json_get(params, "textDocument");
-    const char *uri = json_string(json_get(td, "uri"));
+static void doc_close(LspServer *s, JValue *params) {
+    JValue *td = jmem(params, "textDocument");
+    const char *uri = jstr(jmem(td, "uri"));
     if (!uri) return;
     /* Clearing on close is the spec's rule for a single-file language: with
        the buffer gone the disk file is the truth, and it may differ. */
@@ -255,29 +350,28 @@ static void doc_close(LspServer *s, const JsonValue *params) {
 /* ------------------------------------------------------------------ */
 
 static void handle_initialize(LspServer *s, const char *id, size_t id_len,
-                              const JsonValue *params) {
+                              JValue *params) {
     /* Position encoding (3.17): the client lists its preference in
        `general.positionEncodings`; only an encoding it offered is legal to
        return. Without a list, utf-16 is the only valid answer. */
     const char *encoding = "utf-16";
-    const JsonValue *capabilities = json_get(params, "capabilities");
-    const JsonValue *general = json_get(capabilities, "general");
-    const JsonValue *offered = json_get(general, "positionEncodings");
-    if (offered && offered->kind == JSON_ARRAY) {
-        for (size_t i = 0; i < array_length(offered->items); i++) {
-            const char *name = json_string(*(JsonValue **)array_get(offered->items, i));
-            if (name && strcmp(name, "utf-8") == 0) {
-                encoding = "utf-8";
-                break;
-            }
-            if (name && strcmp(name, "utf-16") == 0) break;   /* the default */
+    JValue *capabilities = jmem(params, "capabilities");
+    JValue *general = jmem(capabilities, "general");
+    struct json_array_s *offered = jarr(jmem(general, "positionEncodings"));
+    for (struct json_array_element_s *e = offered ? offered->start : NULL; e; e = e->next) {
+        const char *name = jstr(e->value);
+        if (name && strcmp(name, "utf-8") == 0) {
+            encoding = "utf-8";
+            break;
         }
+        if (name && strcmp(name, "utf-16") == 0) break;   /* the default */
     }
     /* The documentSymbol shape depends on what the client can take. */
-    const JsonValue *text_caps = json_get(capabilities, "textDocument");
-    const JsonValue *ds_caps = json_get(text_caps, "documentSymbol");
-    const JsonValue *hier = json_get(ds_caps, "hierarchicalDocumentSymbolSupport");
-    if (hier && hier->kind == JSON_BOOL) s->hierarchical_symbols = hier->boolean;
+    JValue *text_caps = jmem(capabilities, "textDocument");
+    JValue *ds_caps = jmem(text_caps, "documentSymbol");
+    bool hierarchical = false;
+    if (jbool(jmem(ds_caps, "hierarchicalDocumentSymbolSupport"), &hierarchical))
+        s->hierarchical_symbols = hierarchical;
 
     s->encoding = encoding;
     s->initialized = true;
@@ -296,18 +390,18 @@ static void handle_initialize(LspServer *s, const char *id, size_t id_len,
 
 /* The document and byte offset a position request names. False when the
    document is not open or the params do not parse. */
-static bool position_params(LspServer *s, const JsonValue *params,
+static bool position_params(LspServer *s, JValue *params,
                             LspDocument **out_doc, size_t *out_offset) {
-    const JsonValue *td = json_get(params, "textDocument");
-    const char *uri = json_string(json_get(td, "uri"));
+    JValue *td = jmem(params, "textDocument");
+    const char *uri = jstr(jmem(td, "uri"));
     if (!uri) return false;
     LspDocument *doc = doc_find(s, uri);
     if (!doc) return false;
 
     long long line = 0, character = 0;
-    const JsonValue *pos = json_get(params, "position");
-    json_int(json_get(pos, "line"), &line);
-    json_int(json_get(pos, "character"), &character);
+    JValue *pos = jmem(params, "position");
+    jint(jmem(pos, "line"), &line);
+    jint(jmem(pos, "character"), &character);
     if (line < 0 || line > 0x7FFFFFFFLL || character < 0 || character > 0x7FFFFFFFLL)
         return false;
 
@@ -327,7 +421,7 @@ static LspTarget target_at(LspDocument *doc, size_t offset) {
 }
 
 static void handle_hover(LspServer *s, const char *id, size_t id_len,
-                         const JsonValue *params) {
+                         JValue *params) {
     LspDocument *doc = NULL;
     size_t offset = 0;
     if (!position_params(s, params, &doc, &offset) || !doc->fe.program) {
@@ -355,7 +449,7 @@ static void handle_hover(LspServer *s, const char *id, size_t id_len,
 }
 
 static void handle_definition(LspServer *s, const char *id, size_t id_len,
-                              const JsonValue *params) {
+                              JValue *params) {
     LspDocument *doc = NULL;
     size_t offset = 0;
     if (!position_params(s, params, &doc, &offset) || !doc->fe.program) {
@@ -500,7 +594,7 @@ static bool completion_program(LspDocument *doc, size_t offset, Frontend *repair
 }
 
 static void handle_completion(LspServer *s, const char *id, size_t id_len,
-                              const JsonValue *params) {
+                              JValue *params) {
     LspDocument *doc = NULL;
     size_t offset = 0;
     if (!position_params(s, params, &doc, &offset)) {
@@ -807,9 +901,9 @@ static void emit_children(JsonBuf *b, LspServer *s, LspDocument *doc, ASTNode *s
 }
 
 static void handle_document_symbols(LspServer *s, const char *id, size_t id_len,
-                                    const JsonValue *params) {
-    const JsonValue *td = json_get(params, "textDocument");
-    const char *uri = json_string(json_get(td, "uri"));
+                                    JValue *params) {
+    JValue *td = jmem(params, "textDocument");
+    const char *uri = jstr(jmem(td, "uri"));
     LspDocument *doc = uri ? doc_find(s, uri) : NULL;
     if (!doc || !doc->fe.program) {
         send_result(s, id, id_len, "null");
@@ -850,15 +944,23 @@ static void handle_document_symbols(LspServer *s, const char *id, size_t id_len,
 }
 
 /* Handle one parsed message. Returns true when `exit` arrived. */
-static bool handle_message(LspServer *s, JsonValue *msg) {
-    const char *method = json_string(json_get(msg, "method"));
-    const JsonValue *idv = json_get(msg, "id");
-    bool is_request = idv != NULL;
-    const char *id = is_request ? idv->raw : NULL;
-    size_t id_len = is_request ? idv->raw_len : 0;
+static bool handle_message(LspServer *s, JValue *msg) {
+    JValue *method_value = jmem(msg, "method");
+    const char *method = jstr(method_value);
+    JValue *id_value = jmem(msg, "id");
+    bool is_request = id_value != NULL;
+
+    /* The id to echo; `jid` writes "null" when there is none, which only a
+       parse error has. */
+    JsonBuf id_buf;
+    json_buf_init(&id_buf);
+    jid(id_value, &id_buf);
+    const char *id = id_buf.data;
+    size_t id_len = id_buf.len;
 
     if (!method) {
         if (is_request) send_error(s, id, id_len, -32600, "a request needs a method");
+        json_buf_free(&id_buf);
         return false;
     }
 
@@ -867,72 +969,55 @@ static bool handle_message(LspServer *s, JsonValue *msg) {
     if (!s->initialized &&
         strcmp(method, "initialize") != 0 && strcmp(method, "exit") != 0) {
         if (is_request) send_error(s, id, id_len, -32002, "server not initialized");
+        json_buf_free(&id_buf);
         return false;
     }
 
     /* After `shutdown` the only useful message is `exit`. */
     if (s->shutdown_received && strcmp(method, "exit") != 0) {
         if (is_request) send_error(s, id, id_len, -32600, "server is shutting down");
+        json_buf_free(&id_buf);
         return false;
     }
 
+    bool quit = false;
     if (strcmp(method, "initialize") == 0) {
-        if (!is_request) return false;
-        if (s->initialized) {
+        if (is_request && !s->initialized)
+            handle_initialize(s, id, id_len, jmem(msg, "params"));
+        else if (is_request)
             send_error(s, id, id_len, -32600, "the server is already initialized");
-            return false;
+    } else if (strcmp(method, "initialized") == 0) {
+        /* a notification: nothing to do */
+    } else if (strcmp(method, "shutdown") == 0) {
+        if (is_request) {
+            s->shutdown_received = true;
+            send_result(s, id, id_len, "null");
         }
-        handle_initialize(s, id, id_len, json_get(msg, "params"));
-        return false;
-    }
-    if (strcmp(method, "initialized") == 0) return false;
-
-    if (strcmp(method, "shutdown") == 0) {
-        if (!is_request) return false;
-        s->shutdown_received = true;
-        send_result(s, id, id_len, "null");
-        return false;
-    }
-    if (strcmp(method, "exit") == 0) return true;
-
-    if (strcmp(method, "textDocument/didOpen") == 0) {
-        doc_open(s, json_get(msg, "params"));
-        return false;
-    }
-    if (strcmp(method, "textDocument/didChange") == 0) {
-        doc_change(s, json_get(msg, "params"));
-        return false;
-    }
-    if (strcmp(method, "textDocument/didClose") == 0) {
-        doc_close(s, json_get(msg, "params"));
-        return false;
-    }
-
-    if (strcmp(method, "textDocument/hover") == 0) {
-        if (is_request) handle_hover(s, id, id_len, json_get(msg, "params"));
-        return false;
-    }
-    if (strcmp(method, "textDocument/definition") == 0) {
-        if (is_request) handle_definition(s, id, id_len, json_get(msg, "params"));
-        return false;
-    }
-    if (strcmp(method, "textDocument/completion") == 0) {
-        if (is_request) handle_completion(s, id, id_len, json_get(msg, "params"));
-        return false;
-    }
-    if (strcmp(method, "textDocument/documentSymbol") == 0) {
-        if (is_request) handle_document_symbols(s, id, id_len, json_get(msg, "params"));
-        return false;
-    }
-
-    /* Anything else: a request gets MethodNotFound — `$/`-prefixed requests
-       included, the spec insists — and a notification is dropped. */
-    if (is_request) {
+    } else if (strcmp(method, "exit") == 0) {
+        quit = true;
+    } else if (strcmp(method, "textDocument/didOpen") == 0) {
+        doc_open(s, jmem(msg, "params"));
+    } else if (strcmp(method, "textDocument/didChange") == 0) {
+        doc_change(s, jmem(msg, "params"));
+    } else if (strcmp(method, "textDocument/didClose") == 0) {
+        doc_close(s, jmem(msg, "params"));
+    } else if (strcmp(method, "textDocument/hover") == 0) {
+        if (is_request) handle_hover(s, id, id_len, jmem(msg, "params"));
+    } else if (strcmp(method, "textDocument/definition") == 0) {
+        if (is_request) handle_definition(s, id, id_len, jmem(msg, "params"));
+    } else if (strcmp(method, "textDocument/completion") == 0) {
+        if (is_request) handle_completion(s, id, id_len, jmem(msg, "params"));
+    } else if (strcmp(method, "textDocument/documentSymbol") == 0) {
+        if (is_request) handle_document_symbols(s, id, id_len, jmem(msg, "params"));
+    } else if (is_request) {
+        /* `$/`-prefixed requests included, the spec insists. */
         char note[256];
         snprintf(note, sizeof note, "unknown method '%s'", method);
         send_error(s, id, id_len, -32601, note);
     }
-    return false;
+
+    json_buf_free(&id_buf);
+    return quit;
 }
 
 /* ------------------------------------------------------------------ */
@@ -952,22 +1037,18 @@ int lsp_server_run(FILE *in, FILE *out) {
         char *body = frame_read(in, &len);
         if (!body) break;   /* the client went away, or the frame was broken */
 
-        Arena arena;
-        arena_init(&arena);
-        const char *err = NULL;
-        JsonValue *msg = json_parse(&arena, body, &err);
+        char note[256];
+        JValue *msg = jparse(body, len, note, sizeof note);
 
         if (!msg) {
-            char note[256];
-            snprintf(note, sizeof note, "invalid JSON: %s", err ? err : "parse error");
             send_error(&srv, NULL, 0, -32700, note);
-        } else if (msg->kind != JSON_OBJECT) {
+        } else if (!json_value_as_object(msg)) {
             send_error(&srv, NULL, 0, -32600, "a JSON-RPC message must be an object");
         } else {
             quit = handle_message(&srv, msg);
         }
 
-        arena_free(&arena);
+        free(msg);   /* the whole parsed message, one allocation */
         free(body);
     }
 

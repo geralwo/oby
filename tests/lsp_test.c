@@ -452,6 +452,7 @@ int main(void) {
         session_add(&s, init_request);
         session_add(&s, "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"foo/bar\"}");
         session_add(&s, "{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"$/setTrace\",\"params\":{\"value\":\"off\"}}");
+        session_add(&s, "{\"jsonrpc\":\"2.0\",\"id\":\"a\\\"b\",\"method\":\"foo/bar\"}");
         session_add(&s, "{\"jsonrpc\":\"2.0\",\"method\":\"$/setTrace\",\"params\":{\"value\":\"off\"}}");
         session_add(&s, "{\"jsonrpc\":\"2.0\",\"method\":\"my/note\"}");
         session_add(&s, "{\"jsonrpc\":\"2.0\",\"id\":8,\"method\":\"shutdown\"}");
@@ -460,7 +461,7 @@ int main(void) {
         Array *frames;
         int status = run_session(&s, &frames);
         check(status == 0, "unknown methods do not disturb the session");
-        check(array_length(frames) == 4, "unknown notifications are dropped");
+        check(array_length(frames) == 5, "unknown notifications are dropped");
         expect_frame(frames, 1,
                      "{\"jsonrpc\":\"2.0\",\"id\":5,\"error\":{\"code\":-32601,"
                      "\"message\":\"unknown method 'foo/bar'\"}}",
@@ -469,6 +470,10 @@ int main(void) {
                      "{\"jsonrpc\":\"2.0\",\"id\":6,\"error\":{\"code\":-32601,"
                      "\"message\":\"unknown method '$/setTrace'\"}}",
                      "a `$/` request is MethodNotFound too");
+        expect_frame(frames, 3,
+                     "{\"jsonrpc\":\"2.0\",\"id\":\"a\\\"b\",\"error\":{\"code\":-32601,"
+                     "\"message\":\"unknown method 'foo/bar'\"}}",
+                     "a string id echoes back");
         free_frames(frames);
         free(s.data);
     }
@@ -487,6 +492,8 @@ int main(void) {
         check(array_length(frames) == 3, "the parse error is answered");
         expect_contains(frames, 0, "\"id\":null", "a parse error has a null id");
         expect_contains(frames, 0, "\"code\":-32700", "a parse error is -32700");
+        expect_contains(frames, 0, "at byte ", "the parse error names the byte");
+        expect_contains(frames, 0, "(line 1, column ", "the parse error names the place");
         expect_frame(frames, 1, init_expected, "initialize still works afterwards");
         free_frames(frames);
         free(s.data);
@@ -504,35 +511,8 @@ int main(void) {
         free(s.data);
     }
 
-    /* ---- the JSON and URI layers underneath ---- */
+    /* ---- the escaping and URI layers underneath ---- */
     {
-        Arena arena;
-        arena_init(&arena);
-        const char *err = NULL;
-
-        JsonValue *root = json_parse(&arena,
-            "{\"a\":[1,2,{\"b\":\"x\\ny\"}],\"n\":null,\"t\":true}", &err);
-        check(root != NULL, "a document parses");
-        JsonValue *a = json_get(root, "a");
-        check(a && a->kind == JSON_ARRAY && array_length(a->items) == 3, "the array member");
-        long long i = 0;
-        check(a && json_int(*(JsonValue **)array_get(a->items, 0), &i) && i == 1,
-              "integers read back");
-        JsonValue *third = a ? *(JsonValue **)array_get(a->items, 2) : NULL;
-        const char *b = json_string(json_get(third, "b"));
-        check(b && strcmp(b, "x\ny") == 0, "string escapes decode");
-        check(json_get(root, "n") && json_get(root, "n")->kind == JSON_NULL,
-              "null reads back");
-        check(json_get(root, "missing") == NULL, "a missing member is NULL");
-
-        JsonValue *emoji = json_parse(&arena, "\"\\ud83d\\ude00\"", &err);
-        check(emoji && emoji->string_len == 4 &&
-              (unsigned char)emoji->string[0] == 0xF0,
-              "a surrogate pair becomes UTF-8");
-
-        check(json_parse(&arena, "{\"a\":}", &err) == NULL, "malformed JSON is refused");
-        check(json_parse(&arena, "1 2", &err) == NULL, "trailing characters are refused");
-
         char escaped[64];
         json_escape(escaped, sizeof escaped, "a\"b\\c\nd");
         check(strcmp(escaped, "a\\\"b\\\\c\\nd") == 0, "escaping round-trips");
@@ -543,7 +523,6 @@ int main(void) {
         check(!uri_to_path("http://x/y", path, sizeof path), "a non-file URI is refused");
         check(path_to_uri("/tmp/a b.oby", path, sizeof path) &&
               strcmp(path, "file:///tmp/a%20b.oby") == 0, "a path becomes a URI");
-        arena_free(&arena);
     }
 
     /* ---- position conversion, both encodings ---- */
