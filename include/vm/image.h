@@ -5,8 +5,8 @@
 #include <stddef.h>
 #include "vm/function.h"
 
-/* A compiled program image: the `payload_type 1` payload, what `obyrun` loads
-   and what `oby --bundle` writes. It is build-coupled — the image records a
+/* A compiled program image: the `payload_type 1` payload, what `--bundle`
+   appends to a copy of `oby`. It is build-coupled — the image records a
    fingerprint of the native table — and the loader refuses anything that does
    not match. See plans/done/standalone_executable_bundling.md for the byte
    layout. */

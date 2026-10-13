@@ -1118,18 +1118,19 @@ oby --bundle game/main.oby game
 ./game
 ```
 
-The output is a *runner* (the VM, the core types and the natives) plus the
-compiled program, so it needs no OBY installation, no `src/prelude/`, no script
-files, and no compiler: it compiles nothing at startup. Delete the sources and
-it still runs. Imports are baked in at bundle time, so a `use` of something that
-does not exist is a bundle-time error like any other diagnostic.
+The output is **a copy of `oby` with the compiled program appended**, so it
+needs no OBY installation, no `src/prelude/`, no script files and no toolchain:
+it compiles nothing at startup. Delete the sources and it still runs (a bundled
+binary ignores its arguments). Imports are baked in at bundle time, so a `use`
+of something that does not exist is a bundle-time error like any other
+diagnostic.
 
-The artifact is a few tens of kilobytes of program — the compiled prelude alone
-is ~17 KB — on top of a ~72 KB runner. It is tied to the build that produced
-it: if the native library changes, an old bundle refuses to run rather than
-calling into the wrong function. Bundling needs only `oby` itself
-(`$OBY_RUNNER` overrides the baked-in runner), and `chmod 0755` is applied on
-Unix.
+Because the artifact carries the toolchain, it is about **256 KB plus the
+program** — the compiled prelude alone is ~17 KB, a small game ~30 KB — rather
+than a few tens of KB. That is the price of needing nothing else: `oby` alone
+bundles, and the result is one file. An image is tied to the build that
+produced it: if the native library changes, an old bundle refuses to run rather
+than calling into the wrong function. `chmod 0755` is applied on Unix.
 
 ## 13. Not yet implemented
 

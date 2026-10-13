@@ -8,7 +8,6 @@ src/core/closure.c
 src/core/arena.c
 src/core/embed.c
 src/core/bundle.c
-src/core/archive.c
 src/core/os.c
 src/compiler/lexer.c
 src/compiler/ast.c

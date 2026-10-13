@@ -1,7 +1,6 @@
 #ifndef OBY_EMBED_H
 #define OBY_EMBED_H
 
-#include <stdbool.h>
 #include <stddef.h>
 
 /* A source file baked into the binary at build time. `data` holds `len` bytes
@@ -21,12 +20,5 @@ size_t embed_static_files(const EmbeddedFile **files);
    so the compiler behaves the same from any working directory. NULL when the
    file is not embedded; the caller then reads it from disk. */
 const EmbeddedFile *embed_lookup(const char *path);
-
-/* Register a file at runtime (a bundle's payload). `path` is used verbatim and
-   must be normalized (`/` separators, entry-relative); `path` and `data` are
-   borrowed, so both must outlive lookups, which is why a runner keeps the
-   payload around until it is done. Registered files shadow both the generated
-   table and the disk. False when out of memory. */
-bool embed_add(const char *path, const char *data, size_t len);
 
 #endif // OBY_EMBED_H

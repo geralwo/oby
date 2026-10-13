@@ -169,21 +169,17 @@ a `use`d file also shows how it was reached:
 shows its kind, its resolved type, and the names involved.
 
 **Standalone executables.** `--bundle` compiles the entry with the prelude and
-its imports, serializes the result (`vm/image.c`), and writes `runner + image +
-footer` to `<output>`. The runner is baked into `oby` at build time
-(`tools/blob_gen.c` over the linked `obyrun`), so bundling needs nothing on hand
-but `oby`; `$OBY_RUNNER` overrides it with a file, for the day there is a
-cross-built one. That runner links the VM, the core types, the natives and the
-image loader — no lexer, parser, sema, codegen or CLI flags, and no prelude
-sources (see `include/vm/image.h`).
+its imports (`vm/image.c` serializes the result) and writes `<output>` as a
+**copy of the running binary** with the image and the footer appended. Nothing
+but `oby` is needed to bundle, and nothing is needed to run the artifact: no
+files, no toolchain, no compilation at startup. The price is size — the artifact
+is the toolchain (~256 KB) plus the program (17–35 KB); see `docs/oby.md` §12.
 
 **Bundled binaries.** Before the command line is parsed, `main` checks whether
-the running executable ends in a bundle footer (`core/bundle.h`). An image
-payload (`payload_type 1`) is loaded and run through the VM; a source archive
-(`payload_type 0`, the dev and test path) is registered as embedded files and
-compiled instead, so imports resolve from the bundle rather than the disk. A
-binary without a footer is the plain compiler, and an unknown payload type is
-refused rather than ignored.
+the running executable ends in a bundle footer (`core/bundle.h`) and, if so,
+runs its image payload through the VM. A binary without a footer is the plain
+compiler, and an unknown payload type is refused rather than ignored. A bundled
+binary never reaches the CLI, so `--bundle` cannot be run from one.
 
 Compiling is split so a bundle needs no temporary file: `compile_source` runs
 the frontend over an in-memory buffer, and `compile_file` is the read-then-

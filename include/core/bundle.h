@@ -6,10 +6,10 @@
 #include <stdint.h>
 #include <stdio.h>
 
-/* Standalone executables: a payload appended to a runner binary, followed by a
-   fixed footer. The OS loader ignores trailing bytes, so a bundled binary is
-   still a valid executable and an unbundled one behaves as the plain tool.
-   See plans/done/standalone_executable_bundling.md for the payload formats. */
+/* Standalone executables: a payload appended to the toolchain binary, followed
+   by a fixed footer. The OS loader ignores trailing bytes, so a bundled binary
+   is still a valid executable and an unbundled one behaves as the plain tool.
+   See plans/self_bundle.md. */
 
 #define OBY_BUNDLE_MAGIC "OBYBUNDLE"  /* 9 bytes, not NUL-terminated in the file */
 #define OBY_BUNDLE_FOOTER_SIZE 25
@@ -17,8 +17,7 @@
 _Static_assert(sizeof(OBY_BUNDLE_MAGIC) - 1 == 9, "bundle magic must be 9 bytes");
 
 enum {
-    OBY_BUNDLE_TYPE_SOURCE = 0, /* source archive; toolchain and tests only */
-    OBY_BUNDLE_TYPE_IMAGE  = 1, /* bytecode image; what ships */
+    OBY_BUNDLE_TYPE_IMAGE = 1, /* bytecode image (vm/image.h) */
 };
 
 /* The 25 bytes at the end of a bundled binary, in order:
@@ -48,10 +47,5 @@ bool bundle_write_footer(FILE *file, uint64_t payload_len, uint32_t payload_type
 /* Read the payload that `footer` describes (malloc'd, caller frees, NULL on
    failure). */
 unsigned char *bundle_read_payload(FILE *file, const BundleFooter *footer);
-
-/* The runner's bytes, baked into the toolchain at build time (`tools/blob_gen.c`
-   over the linked `obyrun`). `--bundle` writes them before the payload, so a
-   standalone executable can be produced without a second file on hand. */
-const unsigned char *runner_bytes(size_t *len);
 
 #endif // OBY_BUNDLE_H

@@ -10,9 +10,7 @@
 
 #include "util.h"
 #include "core/arena.h"
-#include "core/archive.h"
 #include "core/bundle.h"
-#include "core/embed.h"
 #include "core/os.h"
 #include "compiler/lexer.h"
 #include "compiler/parser.h"
@@ -23,7 +21,7 @@
 #include "vm/image.h"
 #include "vm/vm.h"
 
-const char *oby_version_str = "0.0.0";
+const char *oby_version_str = "0.6.0";
 
 /* Command-line options. */
 typedef struct {
@@ -41,8 +39,8 @@ static void print_usage(const char *prog) {
     printf("  -check         check the script for errors (parse + typecheck)\n");
     printf("  -printast      print the parsed and typed AST\n");
     printf("  --bundle <script.oby> <output>\n");
-    printf("                 write <output> as a standalone executable (no tools,\n");
-    printf("                 no script files: the program is compiled into it)\n");
+    printf("                 write <output> as a standalone executable: this binary\n");
+    printf("                 plus the compiled program (no files, no toolchain)\n");
     printf("  -h, --help     show this help\n");
     printf("  -v, --version  show the version\n");
 }
@@ -208,50 +206,34 @@ static unsigned char *read_sized(const char *path, size_t *len) {
     return buf;
 }
 
-/* Write `output` as a standalone executable: the runner, a bytecode image of
-   `entry` (prelude and imports included), and the footer. Needs nothing but
-   this binary: the runner is baked in, and `$OBY_RUNNER` overrides it with a
-   file on disk. */
-static int bundle_command(const char *entry, const char *output) {
-    const unsigned char *runner = NULL;
-    size_t runner_len = 0;
-    unsigned char *runner_owned = NULL;
-
-    const char *override = getenv("OBY_RUNNER");
-    if (override && *override) {
-        FILE *file = fopen(override, "rb");
-        if (!file) {
-            fprintf(stderr, "error: cannot read OBY_RUNNER '%s'\n", override);
-            return 1;
-        }
-        if (bundle_read_footer(file, NULL)) {
-            fprintf(stderr, "error: OBY_RUNNER '%s' already carries a bundle\n",
-                    override);
-            fclose(file);
-            return 1;
-        }
-        fclose(file);
-        runner_owned = read_sized(override, &runner_len);
-        if (!runner_owned) {
-            fprintf(stderr, "error: cannot read OBY_RUNNER '%s'\n", override);
-            return 1;
-        }
-        runner = runner_owned;
-    } else {
-        runner = runner_bytes(&runner_len);
+/* Write `output` as a standalone executable: a copy of this binary, a bytecode
+   image of `entry` (prelude and imports included), and the footer. Nothing
+   but `oby` itself is needed at bundle time; the artifact carries the compiler
+   so that it needs no toolchain and no files. */
+static int bundle_command(const char *argv0, const char *entry, const char *output) {
+    char self[4096];
+    if (!os_get_executable_path(argv0, self, sizeof self)) {
+        fprintf(stderr, "error: cannot find this binary's own path\n");
+        return 1;
+    }
+    size_t self_len = 0;
+    unsigned char *self_bytes = read_sized(self, &self_len);
+    if (!self_bytes) {
+        fprintf(stderr, "error: cannot read '%s'\n", self);
+        return 1;
     }
 
     char *source = read_file(entry);
     if (!source) {
         fprintf(stderr, "error: cannot read '%s'\n", entry);
-        free(runner_owned);
+        free(self_bytes);
         return 1;
     }
 
     Frontend fe;
     if (!frontend_run(&fe, entry, source, false)) {
         frontend_free(&fe);
-        free(runner_owned);
+        free(self_bytes);
         return 1;
     }
 
@@ -265,30 +247,34 @@ static int bundle_command(const char *entry, const char *output) {
             break;
         }
     }
+    if (entry_index == count) {
+        fprintf(stderr, "error: internal: the entry function is missing\n");
+        frontend_free(&fe);
+        free(self_bytes);
+        return 1;
+    }
 
     size_t image_len = 0;
-    unsigned char *image = entry_index < count
-                               ? image_write(functions, count, entry_index,
-                                             prog->global_size, &image_len)
-                               : NULL;
+    unsigned char *image = image_write(functions, count, entry_index,
+                                       prog->global_size, &image_len);
     frontend_free(&fe);
 
     if (!image) {
         fprintf(stderr, "error: cannot serialize '%s'\n", entry);
-        free(runner_owned);
+        free(self_bytes);
         return 1;
     }
 
     FILE *out = fopen(output, "wb");
     bool ok = out != NULL;
     if (ok) {
-        ok = fwrite(runner, 1, runner_len, out) == runner_len &&
+        ok = fwrite(self_bytes, 1, self_len, out) == self_len &&
              fwrite(image, 1, image_len, out) == image_len &&
              bundle_write_footer(out, image_len, OBY_BUNDLE_TYPE_IMAGE);
         if (fclose(out) != 0) ok = false;
     }
+    free(self_bytes);
     free(image);
-    free(runner_owned);
 
     if (!ok) {
         fprintf(stderr, "error: cannot write '%s'\n", output);
@@ -300,60 +286,14 @@ static int bundle_command(const char *entry, const char *output) {
     if (chmod(output, 0755) != 0)
         fprintf(stderr, "warning: cannot make '%s' executable\n", output);
 #endif
-    printf("%s: %zu bytes (runner %zu, image %zu)\n", output,
-           runner_len + image_len + OBY_BUNDLE_FOOTER_SIZE, runner_len, image_len);
+    printf("%s: %zu bytes (oby %zu, image %zu)\n", output,
+           self_len + image_len + OBY_BUNDLE_FOOTER_SIZE, self_len, image_len);
     return 0;
 }
 
 /* ------------------------------------------------------------------ */
 /* Bundled binaries                                                   */
 /* ------------------------------------------------------------------ */
-
-/* Run the script a bundled binary carries: register the payload's files, so
-   the frontend resolves imports from the bundle rather than the disk, then
-   compile and run the entry, which the archive stores first. */
-static int run_bundle(FILE *file, const BundleFooter *footer) {
-    unsigned char *payload = bundle_read_payload(file, footer);
-    if (!payload) {
-        fprintf(stderr, "error: cannot read the bundle payload\n");
-        return 1;
-    }
-
-    int status = 1;
-    Archive archive;
-    if (!archive_parse(payload, (size_t)footer->payload_len, &archive)) {
-        fprintf(stderr, "error: malformed bundle payload\n");
-    } else if (archive.count == 0) {
-        fprintf(stderr, "error: bundle payload holds no files\n");
-    } else {
-        /* The payload and the archive outlive the compilation: the embedded
-           entries borrow both. */
-        bool registered = true;
-        for (size_t i = 0; i < archive.count; i++) {
-            if (!embed_add(archive.files[i].path, archive.files[i].data,
-                           archive.files[i].len)) {
-                fprintf(stderr, "error: out of memory\n");
-                registered = false;
-                break;
-            }
-        }
-        if (registered) {
-            const ArchiveFile *entry = &archive.files[0];
-            char *source = (char *)malloc(entry->len + 1);
-            if (!source) {
-                fprintf(stderr, "error: out of memory\n");
-            } else {
-                memcpy(source, entry->data, entry->len);
-                source[entry->len] = '\0';
-                status = compile_source(entry->path, source, true, false);
-            }
-        }
-    }
-
-    archive_free(&archive);
-    free(payload);
-    return status;
-}
 
 /* Run the payload of a bundled bytecode image. */
 static int run_image_payload(FILE *file, const BundleFooter *footer) {
@@ -366,7 +306,8 @@ static int run_image_payload(FILE *file, const BundleFooter *footer) {
     free(payload);
     if (status < 0) {
         fprintf(stderr,
-                "error: cannot load the bundle image; was it built by a different runner?\n");
+                "error: cannot load the bundle image; was it built by a different\n"
+                "       build of oby?\n");
         return 1;
     }
     return status;
@@ -385,9 +326,7 @@ static bool try_run_bundle(const char *argv0, int *status) {
     BundleFooter footer;
     bool bundled = bundle_read_footer(file, &footer);
     if (bundled) {
-        if (footer.payload_type == OBY_BUNDLE_TYPE_SOURCE) {
-            *status = run_bundle(file, &footer);
-        } else if (footer.payload_type == OBY_BUNDLE_TYPE_IMAGE) {
+        if (footer.payload_type == OBY_BUNDLE_TYPE_IMAGE) {
             *status = run_image_payload(file, &footer);
         } else {
             fprintf(stderr, "error: unknown bundle payload type %u\n",
@@ -414,7 +353,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    if (opts.bundle) return bundle_command(opts.input, opts.output);
+    if (opts.bundle) return bundle_command(argv[0], opts.input, opts.output);
 
     /* `-check` and `-printast` stop after the frontend; the default mode runs
        the compiled bytecode. */

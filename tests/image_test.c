@@ -1,10 +1,9 @@
 /* The bytecode image: an image_write/image_load round trip (code, every
-   constant kind, closure metadata), the refusals, and a smoke test that
-   `obyrun` executes a hand-built image and rejects what it cannot run. */
+   constant kind, closure metadata), the refusals, and a smoke test that a copy
+   of `oby` with an image appended — what `--bundle` writes — runs it. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "core/archive.h"
 #include "core/bundle.h"
 #include "vm/image.h"
 #include "vm/opcode.h"
@@ -134,7 +133,8 @@ int main(void) {
     free_built(main_fn);
     free_built(helper);
 
-    /* obyrun: a minimal image (just HALT) must run, from any directory. */
+    /* Appending a minimal image (just HALT) to a copy of `oby` is exactly what
+       `--bundle` produces: it must run, from any directory, ignoring argv. */
     check("scratch directory", system("mkdir -p " DIR) == 0);
 
     Function *tiny = built("main", 0);
@@ -144,7 +144,7 @@ int main(void) {
     unsigned char *tiny_image = image_write(one, 1, 0, 0, &tiny_len);
     check("minimal image written", tiny_image && tiny_len > 0);
 
-    check("runner copied", system("cp build/obyrun " BINARY) == 0);
+    check("oby copied", system("cp build/oby " BINARY) == 0);
     FILE *out = fopen(BINARY, "ab");
     bool bundled = false;
     if (out) {
@@ -156,25 +156,18 @@ int main(void) {
     check("image appended", bundled);
     system("chmod +x " BINARY);
 
-    check("obyrun runs the image from a foreign cwd",
+    check("bundled binary runs the image from a foreign cwd",
           system("cd tests && ../" BINARY) == 0);
-    check("plain obyrun refuses to run",
-          system("build/obyrun > /dev/null 2>&1") != 0);
+    check("bundled binary ignores argv",
+          system("cd tests && ../" BINARY " --help whatever") == 0);
 
-    /* A runner handed a source archive says so instead of guessing. */
-    const char *text = "print(1)\n";
-    ArchiveFile src_file = {"main.oby", text, strlen(text)};
-    check("runner copied for the source archive", system("cp build/obyrun " BINARY) == 0);
-    FILE *src_out = fopen(BINARY, "ab");
-    bool src_bundled = false;
-    if (src_out) {
-        uint64_t archive_len = 0;
-        src_bundled = archive_write(src_out, &src_file, 1, &archive_len) &&
-                      bundle_write_footer(src_out, archive_len, OBY_BUNDLE_TYPE_SOURCE);
-        fclose(src_out);
-    }
-    check("source archive appended", src_bundled);
-    check("obyrun refuses a source archive",
+    /* A payload type this build does not know is refused, not ignored. */
+    check("oby copied for the unknown type", system("cp build/oby " BINARY) == 0);
+    FILE *weird = fopen(BINARY, "ab");
+    bool footer_written = weird && bundle_write_footer(weird, 0, 9);
+    if (weird) fclose(weird);
+    check("unknown payload type footer", footer_written);
+    check("unknown payload type refused",
           system(BINARY " > /dev/null 2>&1") != 0);
 
     free(tiny_image);

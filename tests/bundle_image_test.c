@@ -1,6 +1,7 @@
 /* --bundle end to end: an OBY script becomes a standalone executable that
-   needs nothing else. The source run is the oracle; the artifact is then run
-   from a foreign working directory, and again after its sources are deleted. */
+   needs nothing else — a copy of `oby` with the compiled program appended. The
+   source run is the oracle; the artifact is then run from a foreign working
+   directory, and again after its sources are deleted. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -8,7 +9,6 @@
 #define DIR    "build/bundle_image"
 #define SCRIPT DIR "/app.oby"
 #define HELPER DIR "/helper.oby"
-#define GOOD   DIR "/good.oby"
 #define BROKEN DIR "/broken.oby"
 #define APP    DIR "/app"
 #define OUT    DIR "/actual.txt"
@@ -52,6 +52,28 @@ static char *read_all(const char *path) {
     return buf;
 }
 
+/* The same, for binary data that needs its length. */
+static unsigned char *read_sized(const char *path, size_t *len) {
+    FILE *file = fopen(path, "rb");
+    if (!file) return NULL;
+    fseek(file, 0, SEEK_END);
+    long size = ftell(file);
+    rewind(file);
+    unsigned char *buf = (unsigned char *)malloc((size_t)size);
+    if (!buf) {
+        fclose(file);
+        return NULL;
+    }
+    size_t got = fread(buf, 1, (size_t)size, file);
+    fclose(file);
+    if (got != (size_t)size) {
+        free(buf);
+        return NULL;
+    }
+    *len = got;
+    return buf;
+}
+
 int main(void) {
     check("scratch directory", system("mkdir -p " DIR) == 0);
     check("helper written",
@@ -73,6 +95,16 @@ int main(void) {
     check("bundle", system("build/oby --bundle " SCRIPT " " APP " > /dev/null") == 0);
     check("output written", file_exists(APP));
 
+    /* The artifact is `oby` itself plus the program: its first bytes are a copy
+       of the toolchain that produced it. */
+    size_t self_len = 0, app_len = 0;
+    unsigned char *self = read_sized("build/oby", &self_len);
+    unsigned char *app = read_sized(APP, &app_len);
+    check("artifact starts as a copy of oby",
+          self && app && app_len > self_len && memcmp(app, self, self_len) == 0);
+    free(self);
+    free(app);
+
     /* Run the artifact from a foreign working directory. */
     check("bundled run", system("cd tests && ../" APP " > ../" OUT) == 0);
     char *actual = read_all(OUT);
@@ -86,11 +118,8 @@ int main(void) {
     check("output still correct", actual && strcmp(actual, "85\n") == 0);
     free(actual);
 
-    /* A second script, for the runner-override checks. */
-    check("good script written", write_file(GOOD, "print(\"ok\\n\")\n"));
-
-    /* Failures: usage, a missing script, a script with errors, a runner that is
-       not there or already carries a bundle. None may leave an output behind. */
+    /* Failures: usage, a missing script, a script with errors. None may leave
+       an output behind. */
     check("--bundle without an output is a usage error",
           system("build/oby --bundle x.oby > /dev/null 2>&1") != 0);
     check("--bundle with -check is a usage error",
@@ -104,22 +133,6 @@ int main(void) {
     check("broken script fails the bundle",
           system("build/oby --bundle " BROKEN " " DIR "/broken > /dev/null 2>&1") != 0);
     check("no output for a broken script", !file_exists(DIR "/broken"));
-
-    check("OBY_RUNNER pointing nowhere fails",
-          system("OBY_RUNNER=" DIR "/nope build/oby --bundle " GOOD " " DIR "/broken > /dev/null 2>&1") != 0);
-    check("no output when the runner is missing", !file_exists(DIR "/broken"));
-
-    check("OBY_RUNNER that is already bundled is refused",
-          system("OBY_RUNNER=" APP " build/oby --bundle " GOOD " " DIR "/broken > /dev/null 2>&1") != 0);
-    check("no output for a bundled runner", !file_exists(DIR "/broken"));
-
-    /* An override runner is used when it is a real one. */
-    check("OBY_RUNNER override bundles",
-          system("OBY_RUNNER=build/obyrun build/oby --bundle " GOOD " " DIR "/override > /dev/null") == 0);
-    check("override artifact runs", system("cd tests && ../" DIR "/override > ../" OUT) == 0);
-    actual = read_all(OUT);
-    check("override artifact output", actual && strcmp(actual, "ok\n") == 0);
-    free(actual);
 
     system("rm -rf " DIR);
     printf("%s\n", fails ? "FAILED" : "ok");

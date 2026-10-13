@@ -213,10 +213,10 @@ packed integer is tested as raw bytes, a tagged value by its tag.
 
 ## 10. Images
 
-A **program image** is how a compiled program travels without a compiler: `oby
---bundle` compiles the prelude and the script, `src/vm/image.c` writes the
-result, and a runner (`obyrun`, or any `oby`) loads it and runs it — no source
-files, no filesystem. See `docs/oby.md` §12 for the command and
+A **program image** is how a compiled program travels inside a bundled
+executable: `oby --bundle` compiles the prelude and the script, `src/vm/image.c`
+writes the result, and the copy of `oby` that carries it loads and runs it — no
+source files, no filesystem. See `docs/oby.md` §12 for the command and
 `plans/done/standalone_executable_bundling.md` for the format at large.
 
 The layout is a header (magic, format version, native fingerprint,

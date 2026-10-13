@@ -59,7 +59,7 @@ int main(int argc, char **argv) {
     }
     fputs("HOST", out);
     fputs("PAYLOAD", out);
-    check("write footer", bundle_write_footer(out, 7, OBY_BUNDLE_TYPE_SOURCE));
+    check("write footer", bundle_write_footer(out, 7, OBY_BUNDLE_TYPE_IMAGE));
     fclose(out);
 
     check("bundled file has a footer", bundle_has_footer(SCRATCH));
@@ -68,7 +68,7 @@ int main(int argc, char **argv) {
     BundleFooter footer = {0, 0, 0};
     check("read footer", in && bundle_read_footer(in, &footer));
     check("footer payload length", footer.payload_len == 7);
-    check("footer payload type", footer.payload_type == OBY_BUNDLE_TYPE_SOURCE);
+    check("footer payload type", footer.payload_type == OBY_BUNDLE_TYPE_IMAGE);
     check("footer reserved is zero", footer.reserved == 0);
 
     /* The bytes on disk: little-endian length, magic at offset 16. */

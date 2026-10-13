@@ -7,20 +7,11 @@ PRELUDE_DIR="src/prelude"
 CFLAGS="-std=c11 -Wall -Wextra -Werror -pedantic -Iinclude -O2 -DOBY_PRELUDE_DIR=\"$PRELUDE_DIR\""
 
 BINARY_NAME="oby"
-RUNNER_NAME="obyrun"
 BUILD_DIR="build"
 SRC_FILE=".sources"
 BINARY_ARGS=""
 EMBED_GEN="tools/embed_gen.c"
 EMBED_SRC="$BUILD_DIR/prelude_embed.c"
-BLOB_GEN="tools/blob_gen.c"
-RUNNER_EMBED="$BUILD_DIR/runner_embed.c"
-
-# The runner: VM, core, natives and the image loader. No compiler, no prelude
-# sources, no archive code — this is what `oby --bundle` copies.
-RUNNER_SRCS="src/core/array.c src/core/string.c src/core/numbers.c src/core/object.c
-	 src/core/closure.c src/core/arena.c src/core/bundle.c src/core/os.c
-	 src/util.c src/obyrun.c"
 
 # Bake the prelude into a C table so the compiler carries it inside the binary
 # and finds it from any working directory (see include/core/embed.h).
@@ -30,29 +21,13 @@ function _build_embed()
 	"$BUILD_DIR/embed_gen" "$PRELUDE_DIR" "$EMBED_SRC" "$PRELUDE_DIR"/*.oby
 }
 
-function _build_runner()
-{
-	echo ":: Building '$RUNNER_NAME' ..."
-	gcc $CFLAGS $RUNNER_SRCS src/vm/*.c src/native/*.c -o "$BUILD_DIR/$RUNNER_NAME"
-}
-
-# Bake the runner into the toolchain, so `oby --bundle` needs nothing but
-# itself. (The tests still use the runner file directly.)
-function _build_runner_embed()
-{
-	gcc $CFLAGS "$BLOB_GEN" -o "$BUILD_DIR/blob_gen"
-	"$BUILD_DIR/blob_gen" "$RUNNER_EMBED" runner_bytes "$BUILD_DIR/$RUNNER_NAME"
-}
-
 function _build_exe()
 {
 	echo ":: Building '$BINARY_NAME' ..."
 	if [ ! -f "$SRC_FILE" ]; then echo -e "error no source file. add a file with $0 add src/file.c" && exit; fi
 	if [ ! -d "$BUILD_DIR" ]; then mkdir "$BUILD_DIR" && echo ":: created build dir"; fi
 	_build_embed
-	_build_runner
-	_build_runner_embed
-	gcc $CFLAGS $(cat "$SRC_FILE") "$EMBED_SRC" "$RUNNER_EMBED" -o "$BUILD_DIR/$BINARY_NAME"
+	gcc $CFLAGS $(cat "$SRC_FILE") "$EMBED_SRC" -o "$BUILD_DIR/$BINARY_NAME"
 }
 
 # Run the .oby and C tests. A passing .oby test must exit 0 and its stdout must
@@ -301,9 +276,6 @@ EOF
 			cat "$SRC_FILE"
 			echo ":: prelude"
 			echo "$PRELUDE_DIR -> $EMBED_SRC"
-			echo ":: runner"
-			echo "$RUNNER_SRCS src/vm/*.c src/native/*.c"
-			echo "$RUNNER_NAME -> $RUNNER_EMBED"
 			echo ":: gcc flags"
 			echo "$CFLAGS"
 		fi
