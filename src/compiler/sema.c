@@ -669,22 +669,25 @@ static Type *resolve_path(Sema *s, ASTNode *node, Scope *scope) {
     Type *cur = segment_type(s, sym, type_seg, scope, node->token);
     for (size_t i = 1; i < n; i++) {
         PathSegment *seg = (PathSegment *)array_get(parts, i);
+        Token tok = (seg->tok.start && seg->tok.length) ? seg->tok : node->token;
         /* `.` follows a value, `::` follows a type. (A value receiver keeps
            both: `v::static_fn` calls the static without the receiver.) */
         if (sym->kind == SYM_TYPE && !seg->is_static) {
-            sema_error(s, node->token, "use '::' to access a member of type '%s'",
+            sema_error(s, tok, "use '::' to access a member of type '%s'",
                        sym->name);
             node->type = s->types.unknown;
             return s->types.unknown;
         }
         if (!cur || !cur->members) {
-            sema_error(s, node->token, "cannot access member '%s' of a non-type", seg->name);
+            const char *tname = (cur && cur->name) ? cur->name : "value";
+            sema_error(s, tok, "type '%s' has no member '%s'", tname, seg->name);
             cur = s->types.unknown;
             break;
         }
         Symbol *m = scope_lookup_local(cur->members, seg->name);
         if (!m) {
-            sema_error(s, node->token, "unknown member '%s'", seg->name);
+            const char *tname = (cur && cur->name) ? cur->name : "value";
+            sema_error(s, tok, "type '%s' has no member '%s'", tname, seg->name);
             cur = s->types.unknown;
             break;
         }
