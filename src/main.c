@@ -11,19 +11,20 @@
 #include "util.h"
 #include "core/bundle.h"
 #include "core/os.h"
+#include "core/version.h"
 #include "compiler/ast_printer.h"
 #include "compiler/frontend.h"
 #include "compiler/codegen.h"
+#include "lsp/server.h"
 #include "vm/image.h"
 #include "vm/vm.h"
-
-const char *oby_version_str = "0.6.4";
 
 /* Command-line options. */
 typedef struct {
     const char *input;   /* script to compile, or NULL */
     const char *output;  /* --bundle: the executable to write */
     bool bundle;         /* --bundle: build a standalone executable */
+    bool lsp;            /* --lsp: run the language server on stdio */
     bool print_ast;      /* -printast: dump the typed AST */
     bool check_only;     /* -check: stop after diagnostics */
 } Options;
@@ -34,6 +35,7 @@ static void print_usage(const char *prog) {
     printf("options:\n");
     printf("  -check         check the script for errors (parse + typecheck)\n");
     printf("  -printast      print the parsed and typed AST\n");
+    printf("  --lsp          run as a language server, speaking LSP on stdio\n");
     printf("  --bundle <script.oby> <output>\n");
     printf("                 write <output> as a standalone executable: this binary\n");
     printf("                 plus the compiled program (no files, no toolchain)\n");
@@ -46,6 +48,7 @@ static bool parse_args(int argc, char **argv, Options *opts) {
     opts->input = NULL;
     opts->output = NULL;
     opts->bundle = false;
+    opts->lsp = false;
     opts->print_ast = false;
     opts->check_only = false;
 
@@ -73,6 +76,8 @@ static bool parse_args(int argc, char **argv, Options *opts) {
             exit(0);
         } else if (strcmp(arg, "--bundle") == 0) {
             opts->bundle = true;
+        } else if (strcmp(arg, "--lsp") == 0) {
+            opts->lsp = true;
         } else if (strcmp(arg, "-check") == 0) {
             opts->check_only = true;
         } else if (strcmp(arg, "-printast") == 0) {
@@ -318,6 +323,10 @@ int main(int argc, char *argv[]) {
     if (!parse_args(argc, argv, &opts)) {
         return 1;
     }
+
+    /* `--lsp` is a mode, not a compile: framed messages in on stdin, framed
+       messages out on stdout, no script involved. */
+    if (opts.lsp) return lsp_server_run(stdin, stdout);
 
     if (opts.input == NULL) {
         print_usage(argv[0]);
