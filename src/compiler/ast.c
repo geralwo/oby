@@ -35,6 +35,7 @@ static Array *clone_path_parts(Arena *arena, Array *src) {
         copy.name = seg->name;
         copy.is_static = seg->is_static;
         copy.type_args = seg->type_args ? clone_node_array(arena, seg->type_args) : NULL;
+        copy.tok = seg->tok;
         array_push(dst, &copy);
     }
     return dst;
@@ -150,6 +151,7 @@ ASTNode *ast_clone(Arena *arena, ASTNode *node) {
         case AST_MEMBER_ASSIGN:
             c->as.member_assign.target = ast_clone(arena, node->as.member_assign.target);
             c->as.member_assign.member = node->as.member_assign.member;
+            c->as.member_assign.member_tok = node->as.member_assign.member_tok;
             c->as.member_assign.value = ast_clone(arena, node->as.member_assign.value);
             c->as.member_assign.is_static = node->as.member_assign.is_static;
             break;
@@ -157,6 +159,7 @@ ASTNode *ast_clone(Arena *arena, ASTNode *node) {
         case AST_MEMBER_ACCESS:
             c->as.member_access.object = ast_clone(arena, node->as.member_access.object);
             c->as.member_access.member = node->as.member_access.member;
+            c->as.member_access.member_tok = node->as.member_access.member_tok;
             c->as.member_access.is_static = node->as.member_access.is_static;
             break;
 

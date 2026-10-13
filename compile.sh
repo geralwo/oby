@@ -128,7 +128,7 @@ function _run_tests()
 		[ -f "$c" ] || continue
 		local name
 		name="$(basename "$c" .c)"
-		if ! build_out=$(gcc $CFLAGS "$c" src/core/*.c src/native/*.c src/vm/*.c src/util.c "$EMBED_SRC" -o "$BUILD_DIR/$name" 2>&1); then
+		if ! build_out=$(gcc $CFLAGS "$c" src/core/*.c src/native/*.c src/vm/*.c src/compiler/*.c src/util.c "$EMBED_SRC" -o "$BUILD_DIR/$name" 2>&1); then
 			echo "  FAIL $c (build)"
 			printf '%s\n' "$build_out" | sed 's/^/        /'
 			fail=$((fail + 1))

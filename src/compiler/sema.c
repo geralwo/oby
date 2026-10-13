@@ -22,7 +22,6 @@ static Type *lookup_builtin(Sema *s, const char *name);
 /* Used by the numeric rules, which sit above these definitions. */
 static bool is_numeric(Type *t);
 static bool is_float_type(Type *t);
-static void type_str(Type *t, char *buf, size_t cap);
 
 /* If `node` is a constant integer expression (a literal, optionally negated),
    return its value. Used for enum auto-increment and constant counts. */
@@ -283,65 +282,6 @@ static bool null_inferred(Type *t) {
     return false;
 }
 
-/* Render a type into `buf` for diagnostics. */
-static void type_str(Type *t, char *buf, size_t cap) {
-    if (!t) { snprintf(buf, cap, "?"); return; }
-    switch (t->kind) {
-        case TYPE_UNKNOWN: snprintf(buf, cap, "?"); break;
-        case TYPE_VOID:    snprintf(buf, cap, "void"); break;
-        case TYPE_NULL:    snprintf(buf, cap, "null"); break;
-        case TYPE_PACKED:  snprintf(buf, cap, "%s", t->name); break;
-        case TYPE_OBJ:     snprintf(buf, cap, "%s", t->name); break;
-        case TYPE_STRING:  snprintf(buf, cap, "%s", t->name); break;
-        case TYPE_ENUM:    snprintf(buf, cap, "%s", t->name); break;
-        case TYPE_ARRAY:
-            /* Recursive, so an array of an instance or of another array reads
-               properly (`Box<int>[]`, `int[][]`). */
-            {
-                char inner[48];
-                inner[0] = '\0';
-                type_str(t->base, inner, sizeof(inner));
-                buf[0] = '\0';
-                strncat(buf, inner, cap - 1);
-                if (t->size) {
-                    char num[32];
-                    snprintf(num, sizeof(num), "[%zu]", t->size);
-                    strncat(buf, num, cap - strlen(buf) - 1);
-                } else {
-                    strncat(buf, "[]", cap - strlen(buf) - 1);
-                }
-            }
-            break;
-        case TYPE_FUNC: {
-            /* Render the signature so diagnostics can show it. */
-            char work[256];
-            size_t used = (size_t)snprintf(work, sizeof(work), "(");
-            for (size_t i = 0; i < t->param_count && used + 1 < sizeof(work); i++) {
-                char pb[64];
-                type_str(t->params[i], pb, sizeof(pb));
-                int n = snprintf(work + used, sizeof(work) - used, "%s%s",
-                                 i ? ", " : "", pb);
-                if (n > 0) used += (size_t)n;
-            }
-            if (used + 1 < sizeof(work)) {
-                char rb[64];
-                type_str(t->ret, rb, sizeof(rb));
-                int n = snprintf(work + used, sizeof(work) - used, ") -> %s", rb);
-                if (n > 0) used += (size_t)n;
-            }
-            if (used >= sizeof(work)) used = sizeof(work) - 1;
-            work[used] = '\0';
-            if (cap > 0) {
-                size_t wl = strlen(work);
-                size_t n = wl < cap ? wl : cap - 1;
-                memcpy(buf, work, n);
-                buf[n] = '\0';
-            }
-            break;
-        }
-    }
-}
-
 /* ------------------------------------------------------------------ */
 /* Path / file helpers                                                */
 /* ------------------------------------------------------------------ */
@@ -564,9 +504,20 @@ static bool rewrite_bare_assign(Sema *s, ASTNode *node, Scope *scope) {
 /* Define a value binding. A local or parameter remembers the function that
    declared it, so a reference from a nested function can be recognised as a
    capture (see `note_capture`). */
-static Symbol *define_value(Sema *s, Scope *scope, const char *name, Type *type) {
+/* Record a declaration's name token on its symbol, for tooling (the language
+   server's go-to-definition). */
+static Symbol *sym_tok(Symbol *sym, Token tok) {
+    if (sym) sym->decl_tok = tok;
+    return sym;
+}
+
+static Symbol *define_value(Sema *s, Scope *scope, const char *name, Type *type,
+                            Token tok) {
     Symbol *sym = scope_define(s->arena, scope, name, type, SYM_VALUE, false);
-    if (sym) sym->def_func = (scope == s->global) ? -1 : s->cur_func;
+    if (sym) {
+        sym->def_func = (scope == s->global) ? -1 : s->cur_func;
+        sym->decl_tok = tok;
+    }
     return sym;
 }
 
@@ -1010,7 +961,8 @@ static void collect_packed_def(Sema *s, ASTNode *stmt) {
 
     Type *t = type_packed_aggregate(&s->types, name, elem, count);
     stmt->type = t;
-    scope_define(s->arena, s->global, name, t, SYM_TYPE, false);
+    sym_tok(scope_define(s->arena, s->global, name, t, SYM_TYPE, false),
+            stmt->as.packed_def.target->token);
 
     /* Member aliases: `x = NAME[0]` maps `x` to element 0. */
     ASTNode *body = stmt->as.packed_def.body;
@@ -1046,7 +998,10 @@ static void collect_packed_def(Sema *s, ASTNode *stmt) {
             continue;
         }
         Symbol *sym = scope_define(s->arena, t->members, mname, elem, SYM_MEMBER, false);
-        if (sym) sym->slot = (int)index;
+        if (sym) {
+            sym->slot = (int)index;
+            sym->decl_tok = field->token;
+        }
         value->as.index.const_index = index;
         value->as.index.has_const_index = true;
         field->type = elem;
@@ -1164,7 +1119,9 @@ static void collect_types(Sema *s, ASTNode *program, const char *dir) {
                 t->src_file = s->diag->file;
                 t->src_source = s->diag->source;
                 stmt->type = t;
-                scope_define(s->arena, s->global, name, t, SYM_TYPE, false);
+                t->decl_tok = stmt->as.type_def.target->token;
+                sym_tok(scope_define(s->arena, s->global, name, t, SYM_TYPE, false),
+                        stmt->as.type_def.target->token);
                 validate_type_params(s, stmt->token, params);
                 continue;
             }
@@ -1174,7 +1131,9 @@ static void collect_types(Sema *s, ASTNode *program, const char *dir) {
             }
             Type *t = type_obj(&s->types, name);
             stmt->type = t;
-            scope_define(s->arena, s->global, name, t, SYM_TYPE, false);
+            t->decl_tok = stmt->as.type_def.target->token;
+            sym_tok(scope_define(s->arena, s->global, name, t, SYM_TYPE, false),
+                    stmt->as.type_def.target->token);
         } else if (stmt->kind == AST_ASSIGN) {
             /* A generic function's parameters are validated here, with the
                types: this pass runs before the later units' globals are
@@ -1193,6 +1152,7 @@ static void collect_types(Sema *s, ASTNode *program, const char *dir) {
             /* The underlying type is inferred from the values in collect_defs. */
             Type *t = type_enum(&s->types, name, s->types.unknown);
             stmt->type = t;
+            t->decl_tok = target->token;
             /* `Type::Name = enum { ... }` defines a static member type. */
             Scope *scope = s->global;
             if (n > 1) {
@@ -1204,7 +1164,7 @@ static void collect_types(Sema *s, ASTNode *program, const char *dir) {
                 sema_error(s, target->token, "cannot redefine '%s'", name);
                 continue;
             }
-            scope_define(s->arena, scope, name, t, SYM_TYPE, n > 1);
+            sym_tok(scope_define(s->arena, scope, name, t, SYM_TYPE, n > 1), target->token);
         }
     }
 
@@ -1230,7 +1190,11 @@ static void collect_types(Sema *s, ASTNode *program, const char *dir) {
             if (!tmpl) continue;
             stmt->type = tmpl;
             Symbol *sym = scope_define(s->arena, s->global, name, tmpl, SYM_TYPE, false);
-            if (sym) { sym->is_alias = true; sym->decl = stmt; }
+            if (sym) {
+                sym->is_alias = true;
+                sym->decl = stmt;
+                sym->decl_tok = stmt->token;
+            }
             validate_type_params(s, stmt->token, params);
             continue;
         }
@@ -1242,7 +1206,11 @@ static void collect_types(Sema *s, ASTNode *program, const char *dir) {
         }
         stmt->type = t;
         Symbol *sym = scope_define(s->arena, s->global, name, t, SYM_TYPE, false);
-        if (sym) { sym->is_alias = true; sym->decl = stmt; }
+        if (sym) {
+            sym->is_alias = true;
+            sym->decl = stmt;
+            sym->decl_tok = stmt->token;
+        }
     }
 
     /* A generic alias's right side has no meaning until its parameters are
@@ -1319,9 +1287,13 @@ static void add_implicit_receivers(Sema *s, ASTNode *table, Type *owner) {
 
 /* Define a global symbol. Its byte offset is assigned later, once every type
    is final (see `assign_global_slots`). */
-static Symbol *define_global(Sema *s, const char *name, Type *type, SymbolKind kind) {
+static Symbol *define_global(Sema *s, const char *name, Type *type, SymbolKind kind,
+                             Token tok) {
     Symbol *sym = scope_define(s->arena, s->global, name, type, kind, false);
-    if (sym) sym->is_global = true;
+    if (sym) {
+        sym->is_global = true;
+        sym->decl_tok = tok;
+    }
     return sym;
 }
 
@@ -1436,6 +1408,7 @@ static void collect_member_assign(Sema *s, ASTNode *node, Type *owner, Scope *sc
         sym = scope_define(s->arena, owner->members, member, mt, kind, is_static);
         if (sym) assign_member_slot(s, owner, sym, is_static);
     }
+    if (sym) sym->decl_tok = node->token;
     if (sym) {
         sym->native_id = native_id;
         if (is_func) sym->kind = kind;
@@ -1488,7 +1461,10 @@ static void collect_table_members(Sema *s, ASTNode *table, Type *owner, Scope *s
             Symbol *sym = scope_define(s->arena, owner->members, name, declared, SYM_MEMBER, false);
             assign_member_slot(s, owner, sym, false);
             field->sym = sym;
-            if (sym) sym->init = field->as.bind.value;
+            if (sym) {
+                sym->init = field->as.bind.value;
+                sym->decl_tok = field->token;
+            }
         } else if (field->kind == AST_ASSIGN) {
             const char *name = simple_path_name(field->as.assign.target);
             ASTNode *value = field->as.assign.value;
@@ -1502,11 +1478,13 @@ static void collect_table_members(Sema *s, ASTNode *table, Type *owner, Scope *s
                 Symbol *sym = scope_define(s->arena, owner->members, name, t, SYM_MEMBER, false);
                 assign_member_slot(s, owner, sym, false);
                 field->sym = sym;
+                if (sym) sym->decl_tok = field->token;
             } else if (value && value->kind == AST_FUNC_LITERAL) {
                 Type *mt = member_func_type(s, value, scope);
                 value->type = mt;
                 field->type = mt;
                 Symbol *sym = scope_define(s->arena, owner->members, name, mt, SYM_MEMBER, false);
+                if (sym) sym->decl_tok = field->token;
                 if (sym && member_is_template(value)) {
                     if (!owner_has_name(s, owner))
                         sema_error(s, value->token,
@@ -1522,6 +1500,7 @@ static void collect_table_members(Sema *s, ASTNode *table, Type *owner, Scope *s
                 Symbol *sym = scope_define(s->arena, owner->members, name, s->types.unknown, SYM_MEMBER, false);
                 assign_member_slot(s, owner, sym, false);
                 field->sym = sym;
+                if (sym) sym->decl_tok = field->token;
             }
             /* The declared value is also the member's default, applied when a
                `{}` literal omits it. A method template has none. */
@@ -1555,7 +1534,7 @@ static void collect_defs(Sema *s, ASTNode *program) {
         if (!name || !stmt->as.bind.type) continue;   /* inferred: done while checking */
         if (scope_lookup(s->global, name)) continue;  /* already declared, or a type */
         Type *declared = resolve_type_node(s, stmt->as.bind.type, s->global);
-        stmt->sym = define_global(s, name, declared, SYM_VALUE);
+        stmt->sym = define_global(s, name, declared, SYM_VALUE, stmt->token);
         stmt->type = declared;
     }
     for (size_t i = 0; i < array_length(stmts); i++) {
@@ -1667,7 +1646,7 @@ static void collect_defs(Sema *s, ASTNode *program) {
                                                      value->as.func.ret_type, tparams);
                     value->type = ft;
                     stmt->type = ft;
-                    Symbol *sym = define_global(s, name, ft, SYM_FUNC);
+                    Symbol *sym = define_global(s, name, ft, SYM_FUNC, stmt->token);
                     if (sym) {
                         sym->is_global = false;   /* a template holds no value */
                         sym->is_generic = true;
@@ -1684,7 +1663,7 @@ static void collect_defs(Sema *s, ASTNode *program) {
                     Type *ft = func_type_from_params(s, value->as.func.params, value->as.func.ret_type, s->global);
                     value->type = ft;
                     stmt->type = ft;
-                    stmt->sym = define_global(s, name, ft, SYM_FUNC);
+                    stmt->sym = define_global(s, name, ft, SYM_FUNC, stmt->token);
                 } else if (value && value->kind == AST_EXTERN_DEF) {
                     Type *ft = func_type_from_params(s, value->as.extern_def.params,
                                                      value->as.extern_def.ret_type, s->global);
@@ -1695,7 +1674,7 @@ static void collect_defs(Sema *s, ASTNode *program) {
                     if (id < 0)
                         sema_error(s, value->token, "unknown native '%s'", value->as.extern_def.name);
                     value->as.extern_def.native_id = id;
-                    Symbol *sym = define_global(s, name, ft, SYM_FUNC);
+                    Symbol *sym = define_global(s, name, ft, SYM_FUNC, stmt->token);
                     if (sym) sym->native_id = id;
                     stmt->sym = sym;
                 } else if (value && value->kind == AST_TABLE_LITERAL) {
@@ -1704,9 +1683,10 @@ static void collect_defs(Sema *s, ASTNode *program) {
                     value->type = t;
                     stmt->type = t;
                     collect_table_members(s, value, t, s->global);
-                    stmt->sym = define_global(s, name, t, SYM_VALUE);
+                    stmt->sym = define_global(s, name, t, SYM_VALUE, stmt->token);
                 } else {
-                    stmt->sym = define_global(s, name, s->types.unknown, SYM_VALUE);
+                    stmt->sym = define_global(s, name, s->types.unknown, SYM_VALUE,
+                                              stmt->token);
                 }
                 break;
             }
@@ -1737,7 +1717,8 @@ static void collect_defs(Sema *s, ASTNode *program) {
                 if (id < 0)
                     sema_error(s, stmt->token, "unknown native '%s'", stmt->as.extern_def.name);
                 stmt->as.extern_def.native_id = id;
-                Symbol *sym = define_global(s, stmt->as.extern_def.name, ft, SYM_FUNC);
+                Symbol *sym = define_global(s, stmt->as.extern_def.name, ft, SYM_FUNC,
+                                            stmt->token);
                 if (sym) sym->native_id = id;
                 stmt->sym = sym;
                 break;
@@ -2173,9 +2154,9 @@ static ASTNode *make_op_call(Sema *s, Type *owner, const char *name, Symbol *ov,
                              ASTNode *arg0, ASTNode *arg1, Token tok) {
     ASTNode *callee = ast_node_new(s->arena, AST_PATH, tok);
     callee->as.path.parts = array_new(sizeof(PathSegment));
-    PathSegment tseg = { (char *)owner->name, false, NULL };
+    PathSegment tseg = { (char *)owner->name, false, NULL, tok };
     array_push(callee->as.path.parts, &tseg);
-    PathSegment oseg = { (char *)name, true, NULL };
+    PathSegment oseg = { (char *)name, true, NULL, tok };
     array_push(callee->as.path.parts, &oseg);
     callee->as.path.syms = array_new(sizeof(Symbol *));
     array_push(callee->as.path.syms, &ov);
@@ -2407,7 +2388,7 @@ static void check_func_body(Sema *s, ASTNode *func, Scope *parent) {
             if (p->as.param.type && lookup_type_name(scope, p->as.param.name))
                 sema_error(s, p->token, "cannot reuse the type name '%s' as a parameter",
                            p->as.param.name);
-            p->sym = define_value(s, scope, p->as.param.name, pt);
+            p->sym = define_value(s, scope, p->as.param.name, pt, p->token);
         }
     }
 
@@ -3007,6 +2988,7 @@ static Symbol *instantiate_func(Sema *s, Symbol *tmpl, Array *args, Type *owner_
     Symbol *sym = scope_define(s->arena, s->global, name, NULL, SYM_FUNC, false);
     if (!sym) return NULL;
     sym->is_global = true;
+    sym->decl_tok = decl->token;
     clone->sym = sym;
     array_push(decl->as.func.insts, &clone);
 
@@ -3885,7 +3867,8 @@ static void check_stmt(Sema *s, ASTNode *node, Scope *scope) {
                 bscope = (s->func_depth == 0) ? s->global : scope;
             }
             Symbol *bsym = node->sym;   /* set by `collect_defs` for a file-scope declaration */
-            if (!bsym) bsym = define_value(s, bscope, node->as.bind.name, declared);
+            if (!bsym) bsym = define_value(s, bscope, node->as.bind.name, declared,
+                                           node->token);
             if (bsym && !node->as.bind.is_local && s->func_depth == 0) {
                 bsym->is_global = true;
                 bsym->def_func = -1;
@@ -3982,7 +3965,7 @@ static void check_stmt(Sema *s, ASTNode *node, Scope *scope) {
                                  "'%s' is undeclared; the assignment declares a new local "
                                  "(write 'local %s = ...')", name, name);
                 Scope *def_scope = at_global ? s->global : scope;
-                Symbol *ns = define_value(s, def_scope, name, vt);
+                Symbol *ns = define_value(s, def_scope, name, vt, target->token);
                 if (ns && at_global) {
                     ns->is_global = true;
                     ns->def_func = -1;

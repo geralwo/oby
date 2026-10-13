@@ -421,7 +421,7 @@ static ASTNode *parse_primary(Parser *p) {
         node->as.path.parts = array_new(sizeof(PathSegment));
         node->as.path.syms = NULL;
         node->as.path.is_global = true;
-        PathSegment seg = { strndup(name.start, name.length), false, NULL };
+        PathSegment seg = { strndup(name.start, name.length), false, NULL, name };
         array_push(node->as.path.parts, &seg);
         return node;
     }
@@ -441,7 +441,7 @@ static ASTNode *parse_primary(Parser *p) {
         advance(p);
         ASTNode *node = ast_node_new(p->arena, AST_PATH, t);
         node->as.path.parts = array_new(sizeof(PathSegment));
-        PathSegment seg = { strndup(t.start, t.length), false, NULL };
+        PathSegment seg = { strndup(t.start, t.length), false, NULL, t };
         array_push(node->as.path.parts, &seg);
         return node;
     }
@@ -557,7 +557,7 @@ static ASTNode *parse_postfix(Parser *p) {
             Token name = p->current;
             advance(p);
             if (left && left->kind == AST_PATH) {
-                PathSegment seg = { strndup(name.start, name.length), is_static, NULL };
+                PathSegment seg = { strndup(name.start, name.length), is_static, NULL, name };
                 array_push(left->as.path.parts, &seg);
                 /* `xs.map<int>(f)`: the arguments follow the last segment. */
                 try_expression_type_args(p, left);
@@ -566,6 +566,7 @@ static ASTNode *parse_postfix(Parser *p) {
                 ASTNode *node = ast_node_new(p->arena, AST_MEMBER_ACCESS, name);
                 node->as.member_access.object = left;
                 node->as.member_access.member = strndup(name.start, name.length);
+                node->as.member_access.member_tok = name;
                 node->as.member_access.is_static = is_static;
                 left = node;
             }
@@ -1171,11 +1172,12 @@ static ASTNode *parse_stmt(Parser *p) {
 
         if (expr->kind == AST_PATH && array_length(expr->as.path.parts) > 1) {
             /* Member assignment: target.member = value */
-            PathSegment seg = { NULL, false, NULL };
+            PathSegment seg = { 0 };
             array_pop(expr->as.path.parts, &seg);
             ASTNode *node = ast_node_new(p->arena, AST_MEMBER_ASSIGN, expr->token);
             node->as.member_assign.target = expr;
             node->as.member_assign.member = seg.name ? seg.name : "unknown";
+            node->as.member_assign.member_tok = seg.tok;
             node->as.member_assign.value = value;
             node->as.member_assign.is_static = seg.is_static;
             return node;
@@ -1186,6 +1188,7 @@ static ASTNode *parse_stmt(Parser *p) {
             ASTNode *node = ast_node_new(p->arena, AST_MEMBER_ASSIGN, expr->token);
             node->as.member_assign.target = expr->as.member_access.object;
             node->as.member_assign.member = expr->as.member_access.member;
+            node->as.member_assign.member_tok = expr->as.member_access.member_tok;
             node->as.member_assign.value = value;
             node->as.member_assign.is_static = expr->as.member_access.is_static;
             return node;
@@ -1269,7 +1272,7 @@ static ASTNode *parse_type_ref(Parser *p) {
     advance(p);
     ASTNode *node = ast_node_new(p->arena, AST_PATH, t);
     node->as.path.parts = array_new(sizeof(PathSegment));
-    PathSegment seg = { strndup(t.start, t.length), false, NULL };
+    PathSegment seg = { strndup(t.start, t.length), false, NULL, t };
     parse_type_args(p, &seg);
     array_push(node->as.path.parts, &seg);
 
@@ -1279,7 +1282,7 @@ static ASTNode *parse_type_ref(Parser *p) {
         if (!check(p, TOKEN_IDENTIFIER)) break;
         Token n = p->current;
         advance(p);
-        PathSegment s = { strndup(n.start, n.length), is_static, NULL };
+        PathSegment s = { strndup(n.start, n.length), is_static, NULL, n };
         parse_type_args(p, &s);
         array_push(node->as.path.parts, &s);
     }

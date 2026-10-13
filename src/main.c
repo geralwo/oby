@@ -9,15 +9,11 @@
 #endif
 
 #include "util.h"
-#include "core/arena.h"
 #include "core/bundle.h"
 #include "core/os.h"
-#include "compiler/lexer.h"
-#include "compiler/parser.h"
 #include "compiler/ast_printer.h"
-#include "compiler/sema.h"
+#include "compiler/frontend.h"
 #include "compiler/codegen.h"
-#include "compiler/diag.h"
 #include "vm/image.h"
 #include "vm/vm.h"
 
@@ -105,55 +101,14 @@ static bool parse_args(int argc, char **argv, Options *opts) {
 /* Compiling                                                          */
 /* ------------------------------------------------------------------ */
 
-/* One compilation in progress: the frontend's arena, diagnostics, and the
-   checked program. Everything the frontend allocated lives in the arena. */
-typedef struct {
-    Diagnostics diag;
-    Arena       arena;
-    Sema        sema;
-    ASTNode    *program;
-    char       *source;  /* owned */
-} Frontend;
-
-/* Parse and typecheck `source`, which is named `label` in diagnostics and is
-   the base `use` resolves against. Prints the AST and the summary; false when
-   any diagnostic was an error. */
-static bool frontend_run(Frontend *fe, const char *label, char *source, bool want_ast) {
-    fe->source = source;
-    diag_init(&fe->diag);
-    diag_set_source(&fe->diag, label, source);
-
-    arena_init(&fe->arena);
-
-    Lexer lexer;
-    lexer_init(&lexer, source);
-    Parser parser;
-    parser_init(&parser, &lexer, &fe->arena, &fe->diag);
-    fe->program = parse_program(&parser);
-
-    if (parser.had_error) {
-        diag_summary(&fe->diag);
-        return false;
-    }
-
-    sema_init(&fe->sema, &fe->arena, &fe->diag);
-    sema_check(&fe->sema, fe->program, label);
-
-    if (want_ast && fe->diag.error_count == 0) print_ast(fe->program, 0);
-    diag_summary(&fe->diag);
-    return fe->diag.error_count == 0;
-}
-
-static void frontend_free(Frontend *fe) {
-    arena_free(&fe->arena);
-    free(fe->source);
-}
-
 /* Compile an in-memory source buffer and, unless `run` is false, run it.
    Takes ownership of `source`. Returns the process status. */
 static int compile_source(const char *label, char *source, bool run, bool want_ast) {
     Frontend fe;
-    bool ok = frontend_run(&fe, label, source, want_ast);
+    frontend_init(&fe);
+    bool ok = frontend_run(&fe, label, source);
+    if (want_ast && fe.diag.error_count == 0) print_ast(fe.program, 0);
+    diag_summary(&fe.diag);
 
     int status = 0;
     if (!ok) {
@@ -239,7 +194,10 @@ static int bundle_command(const char *argv0, const char *entry, const char *outp
     }
 
     Frontend fe;
-    if (!frontend_run(&fe, entry, source, false)) {
+    frontend_init(&fe);
+    bool checked = frontend_run(&fe, entry, source);
+    diag_summary(&fe.diag);
+    if (!checked) {
         frontend_free(&fe);
         free(self_bytes);
         return 1;

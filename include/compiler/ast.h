@@ -14,6 +14,7 @@ typedef struct {
     char *name;
     bool is_static;
     Array *type_args;
+    Token tok;      /* the identifier, for tooling (hover, definition) */
 } PathSegment;
 
 /* One constant of an enum definition. */
@@ -107,8 +108,8 @@ typedef struct ASTNode {
         /* `name = <function type>` (or `name<T> = ...` for a generic one) names
            a function type (`plans/done/function_type_aliases.md`). */
         struct { const char *name; struct ASTNode *type; Array *type_params; } type_alias;
-        struct { struct ASTNode *target; const char *member; struct ASTNode *value; bool is_static; } member_assign;
-        struct { struct ASTNode *object; const char *member; bool is_static; } member_access;
+        struct { struct ASTNode *target; const char *member; Token member_tok; struct ASTNode *value; bool is_static; } member_assign;
+        struct { struct ASTNode *object; const char *member; Token member_tok; bool is_static; } member_access;
         struct { Array *fields; } table;
         struct {
             Array *elements;          /* `[a, b, c]` */

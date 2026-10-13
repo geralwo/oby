@@ -1,4 +1,5 @@
 #include <string.h>
+#include <stdio.h>
 #include "compiler/type.h"
 #include "core/value.h"
 
@@ -171,6 +172,68 @@ void type_context_init(TypeContext *tc, Arena *arena) {
     tc->uint_type = type_packed(tc, "uint", tc->byte, 4);
     tc->int64_type = type_packed(tc, "int64", tc->byte, 8);
     tc->uint64_type = type_packed(tc, "uint64", tc->byte, 8);
+}
+
+/* ------------------------------------------------------------------ */
+/* Rendering                                                          */
+/* ------------------------------------------------------------------ */
+
+void type_str(const Type *t, char *buf, size_t cap) {
+    if (!t) { snprintf(buf, cap, "?"); return; }
+    switch (t->kind) {
+        case TYPE_UNKNOWN: snprintf(buf, cap, "?"); break;
+        case TYPE_VOID:    snprintf(buf, cap, "void"); break;
+        case TYPE_NULL:    snprintf(buf, cap, "null"); break;
+        case TYPE_PACKED:  snprintf(buf, cap, "%s", t->name); break;
+        case TYPE_OBJ:     snprintf(buf, cap, "%s", t->name); break;
+        case TYPE_STRING:  snprintf(buf, cap, "%s", t->name); break;
+        case TYPE_ENUM:    snprintf(buf, cap, "%s", t->name); break;
+        case TYPE_ARRAY:
+            /* Recursive, so an array of an instance or of another array reads
+               properly (`Box<int>[]`, `int[][]`). */
+            {
+                char inner[48];
+                inner[0] = '\0';
+                type_str(t->base, inner, sizeof(inner));
+                buf[0] = '\0';
+                strncat(buf, inner, cap - 1);
+                if (t->size) {
+                    char num[32];
+                    snprintf(num, sizeof(num), "[%zu]", t->size);
+                    strncat(buf, num, cap - strlen(buf) - 1);
+                } else {
+                    strncat(buf, "[]", cap - strlen(buf) - 1);
+                }
+            }
+            break;
+        case TYPE_FUNC: {
+            /* Render the signature so diagnostics can show it. */
+            char work[256];
+            size_t used = (size_t)snprintf(work, sizeof(work), "(");
+            for (size_t i = 0; i < t->param_count && used + 1 < sizeof(work); i++) {
+                char pb[64];
+                type_str(t->params[i], pb, sizeof(pb));
+                int n = snprintf(work + used, sizeof(work) - used, "%s%s",
+                                 i ? ", " : "", pb);
+                if (n > 0) used += (size_t)n;
+            }
+            if (used + 1 < sizeof(work)) {
+                char rb[64];
+                type_str(t->ret, rb, sizeof(rb));
+                int n = snprintf(work + used, sizeof(work) - used, ") -> %s", rb);
+                if (n > 0) used += (size_t)n;
+            }
+            if (used >= sizeof(work)) used = sizeof(work) - 1;
+            work[used] = '\0';
+            if (cap > 0) {
+                size_t wl = strlen(work);
+                size_t n = wl < cap ? wl : cap - 1;
+                memcpy(buf, work, n);
+                buf[n] = '\0';
+            }
+            break;
+        }
+    }
 }
 
 /* ------------------------------------------------------------------ */

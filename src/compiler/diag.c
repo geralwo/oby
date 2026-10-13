@@ -9,6 +9,19 @@ void diag_init(Diagnostics *d) {
     d->error_count = 0;
     d->warning_count = 0;
     d->include_depth = 0;
+    d->capturing = false;
+    d->entries = NULL;
+}
+
+void diag_free(Diagnostics *d) {
+    if (d->entries) {
+        array_free(d->entries);
+        d->entries = NULL;
+    }
+}
+
+void diag_set_capture(Diagnostics *d, bool capturing) {
+    d->capturing = capturing;
 }
 
 void diag_set_source(Diagnostics *d, const char *file, const char *source) {
@@ -83,10 +96,26 @@ static void print_location(Diagnostics *d, int line, const char *pos, size_t len
     fprintf(stderr, "\n");
 }
 
-static void vreport(Diagnostics *d, const char *level, int line,
+static void vreport(Diagnostics *d, int severity, const char *level, int line,
                     const char *pos, size_t len, const char *fmt, va_list ap) {
-    const char *file = d->file ? d->file : "<input>";
     int col = compute_col(d->source, pos);
+
+    if (d->capturing) {
+        if (!d->entries) d->entries = array_new(sizeof(DiagEntry));
+        if (d->entries) {
+            DiagEntry e;
+            e.severity = severity;
+            e.file = d->file;
+            e.line = line;
+            e.column = col;
+            e.length = len;
+            vsnprintf(e.message, sizeof(e.message), fmt, ap);
+            array_push(d->entries, &e);
+        }
+        return;
+    }
+
+    const char *file = d->file ? d->file : "<input>";
     fprintf(stderr, "%s:%d:%d: %s: ", file, line, col, level);
     vfprintf(stderr, fmt, ap);
     fprintf(stderr, "\n");
@@ -103,7 +132,7 @@ void diag_error(Diagnostics *d, Token tok, const char *fmt, ...) {
     d->error_count++;
     va_list ap;
     va_start(ap, fmt);
-    vreport(d, "error", tok.line, tok.start, tok.length, fmt, ap);
+    vreport(d, 1, "error", tok.line, tok.start, tok.length, fmt, ap);
     va_end(ap);
 }
 
@@ -111,11 +140,12 @@ void diag_warning(Diagnostics *d, Token tok, const char *fmt, ...) {
     d->warning_count++;
     va_list ap;
     va_start(ap, fmt);
-    vreport(d, "warning", tok.line, tok.start, tok.length, fmt, ap);
+    vreport(d, 2, "warning", tok.line, tok.start, tok.length, fmt, ap);
     va_end(ap);
 }
 
 void diag_summary(Diagnostics *d) {
+    if (d->capturing) return;
     if (d->error_count == 0 && d->warning_count == 0) return;
     fprintf(stderr, "%d error%s, %d warning%s\n",
             d->error_count, d->error_count == 1 ? "" : "s",

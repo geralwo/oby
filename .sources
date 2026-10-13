@@ -29,3 +29,4 @@ src/native/time.c
 src/vm/function.c
 src/vm/image.c
 src/vm/vm.c
+src/compiler/frontend.c

@@ -3,6 +3,7 @@
 
 #include <stddef.h>
 #include <stdbool.h>
+#include "compiler/lexer.h"
 #include "core/arena.h"
 #include "core/array.h"
 
@@ -50,6 +51,7 @@ struct Symbol {
     bool has_const;     /* integer compile-time constant (enum item) */
     bool is_enum_item;  /* an item of an enum type (with or without a constant) */
     long long const_value;
+    Token decl_tok;     /* the declaration's name token, for tooling; zeroed = unknown */
     Symbol *next;       /* next overload with the same name */
 };
 
@@ -88,6 +90,7 @@ struct Type {
     const char *src_file;
     const char *src_source;
     bool is_template;
+    Token decl_tok;     /* the declaration's name token, for tooling; zeroed = unknown */
 };
 
 /* Owns the built-in types. User types are interned through the same arena. */
@@ -138,6 +141,10 @@ Type *type_instance_find(TypeContext *tc, Type *template, Array *args);
 /* The number of bytes a value of `t` occupies on the VM stack. Tagged values
    take a full `Value`; packed values are byte-tight. */
 size_t type_size(const Type *t);
+
+/* Render `t` into `buf` for diagnostics and tooling (e.g. `Box<int>[]`,
+   `(int, String) -> void`). Always NUL-terminates. */
+void type_str(const Type *t, char *buf, size_t cap);
 
 /* True for the unsigned integer types (`byte`, `uint`, `uint64`). Used by the
    numeric conversion rules and to pick the VM kind. */
