@@ -310,7 +310,7 @@ static Value new_bytes_value(size_t count) {
         }
         memset(a->buffer, 0, count);
     }
-    a->length = count;
+    array_set_length(a, count);
     return val_array(a);
 }
 
@@ -370,7 +370,7 @@ static Value nat_read_bytes(Value *args, int argc) {
         array_free(arr);
         return val_null();
     }
-    arr->length = (size_t)got;
+    array_set_length(arr, (size_t)got);
     return v;
 }
 

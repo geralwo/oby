@@ -279,7 +279,6 @@ ASTNode *ast_clone(Arena *arena, ASTNode *node) {
         case AST_BREAK:
         case AST_CONTINUE:
         case AST_NULL:
-        case AST_STMT_LIST:
             break;
     }
     return c;

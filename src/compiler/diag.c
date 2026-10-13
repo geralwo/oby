@@ -115,17 +115,6 @@ void diag_warning(Diagnostics *d, Token tok, const char *fmt, ...) {
     va_end(ap);
 }
 
-void diag_error_line(Diagnostics *d, int line, const char *fmt, ...) {
-    d->error_count++;
-    const char *file = d->file ? d->file : "<input>";
-    fprintf(stderr, "%s:%d: error: ", file, line);
-    va_list ap;
-    va_start(ap, fmt);
-    vfprintf(stderr, fmt, ap);
-    va_end(ap);
-    fprintf(stderr, "\n");
-}
-
 void diag_summary(Diagnostics *d) {
     if (d->error_count == 0 && d->warning_count == 0) return;
     fprintf(stderr, "%d error%s, %d warning%s\n",

@@ -58,8 +58,7 @@ typedef enum {
     AST_FUNC_LITERAL,
     AST_EXTERN_DEF,
     AST_PARAM,
-    AST_BLOCK,
-    AST_STMT_LIST
+    AST_BLOCK
 } NodeType;
 
 /* Compiler intrinsics recognized from method-style syntax; they are not real

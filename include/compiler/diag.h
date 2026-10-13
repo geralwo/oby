@@ -37,9 +37,6 @@ void diag_pop_include(Diagnostics *d);
 void diag_error(Diagnostics *d, Token tok, const char *fmt, ...);
 void diag_warning(Diagnostics *d, Token tok, const char *fmt, ...);
 
-/* Report without a token (no source line/caret). */
-void diag_error_line(Diagnostics *d, int line, const char *fmt, ...);
-
 /* Print a one-line summary if any diagnostics were emitted. */
 void diag_summary(Diagnostics *d);
 

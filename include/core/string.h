@@ -29,12 +29,4 @@ String *string_concat(const String *a, const String *b);
 bool    string_equal(const String *a, const String *b);
 size_t  string_hash(const String *str);
 
-/* Interpolation */
-/* 
- * Interpolates variables into a format string.
- * 'fmt' is the template (e.g., "Hello ${name}").
- * 'args' is an Array of String pointers representing the scope/variables.
- */
-String *string_interpolate(const String *fmt, const Array *args);
-
 #endif // OBY_STRING_H

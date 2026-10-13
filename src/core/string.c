@@ -65,9 +65,3 @@ bool string_equal(const String *a, const String *b) {
 size_t string_hash(const String *str) {
     return str->hash;
 }
-
-String *string_interpolate(const String *fmt, const Array *args) {
-    (void)fmt;
-    (void)args;
-    return NULL; 
-}

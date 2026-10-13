@@ -35,8 +35,7 @@ typedef struct {
 
 ### Interpolation
 The compiler expands `${expr}` at codegen time: each part is converted with the
-`to_str` native and joined with `str_concat`. `string_interpolate()` in
-`src/core/string.c` is dead code kept for reference.
+`to_str` native and joined with `str_concat`; there is no runtime helper.
 
 ## Future Considerations
 - **Interning**: To save memory and speed up comparisons, OBY may implement a global string pool where identical string literals are shared.

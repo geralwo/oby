@@ -25,22 +25,6 @@ Array *array_new(size_t size_of_element) {
     return arr;
 }
 
-Array *array_new_fixed(size_t size_of_element, size_t length) {
-    Array *arr = (Array *)malloc(sizeof(Array));
-    if (arr == NULL) {
-        return NULL;
-    }
-    array_init(arr, size_of_element);
-    arr->buffer = malloc(length * size_of_element);
-    if (arr->buffer == NULL) {
-        free(arr);
-        return NULL;
-    }
-    arr->capacity = length;
-    arr->flags |= ARRAY_F_FIXED | ARRAY_F_OWNED;
-    return arr;
-}
-
 void array_free(Array *arr) {
     if (arr != NULL && (arr->flags & ARRAY_F_OWNED)) {
         free(arr->buffer);
@@ -58,10 +42,6 @@ size_t array_capacity(const Array *arr) {
 
 size_t array_length(const Array *arr) {
     return arr ? arr->length : 0;
-}
-
-bool array_is_empty(const Array *arr) {
-    return arr ? (arr->length == 0) : true;
 }
 
 int array_reserve(Array *arr, size_t new_capacity) {
@@ -112,14 +92,6 @@ void *array_get(const Array *arr, size_t index) {
     assert(arr != NULL);
     assert(index < arr->length);
     return (char *)arr->buffer + (index * arr->size_of_element);
-}
-
-void *array_at(const Array *arr, size_t index) {
-    return array_get(arr, index);
-}
-
-void *array_front(const Array *arr) {
-    return array_get(arr, 0);
 }
 
 void *array_back(const Array *arr) {
@@ -212,11 +184,6 @@ bool array_remove(Array *arr, size_t index, void *out) {
     return true;
 }
 
-void array_clear(Array *arr) {
-    assert(arr != NULL);
-    arr->length = 0;
-}
-
 int array_append(Array *arr, const void *values, size_t count) {
     assert(arr != NULL);
     assert(values != NULL);
@@ -305,12 +272,6 @@ void array_swap(Array *arr, size_t i, size_t j) {
     memcpy(elem_j, temp, arr->size_of_element);
     
     free(temp);
-}
-
-void array_set_length(Array *arr, size_t new_length) {
-    assert(arr != NULL);
-    assert(new_length <= arr->capacity);
-    arr->length = new_length;
 }
 
 void array_iter_init(ArrayIterator *it, const Array *arr) {

@@ -181,8 +181,8 @@ static Value string_buffer_view(String *s) {
         if (!arr) return val_null();
         array_init(arr, 1);
         arr->buffer = s->data;
-        arr->length = s->length;
         arr->capacity = s->length;
+        array_set_length(arr, s->length);
         s->view = arr;
     }
     return val_array(s->view);
