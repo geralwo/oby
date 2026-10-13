@@ -102,10 +102,11 @@ Then `M-x eglot` in an `oby` buffer.
 VS Code has no built-in way to attach a server to a language it does not know,
 so it needs a small client extension (`vscode-languageclient` with
 `documentSelector: [{ language: "oby" }]` and the server command
-`{ command: "oby", args: ["--lsp"] }`). Zed is the same story: its settings
-configure servers for languages an extension has registered, and there is no
-OBY language extension yet. Neovim, Helix, and Emacs work with no extra
-artifact.
+`{ command: "oby", args: ["--lsp"] }`). Zed is the same story, with one
+wrinkle that works in our favor: the server *command* lives in settings
+(`lsp.oby.binary`), so only the name registration needs an extension.
+`editors/zed/README.md` lays out the routes, including a no-Rust one that
+reuses a stub wasm. Neovim, Helix, and Emacs work with no extra artifact.
 
 ## The server in WSL
 
@@ -123,8 +124,7 @@ on Windows the same command goes in `cmd`:
 cmd = { "wsl.exe", "-e", "/mnt/c/Users/user/oby/build/oby", "--lsp" },
 ```
 
-One caveat: the Windows client sends Windows paths (`file:///c%3A/...`), so
-`use` imports cannot be resolved on the WSL side and will report errors the
-command line (running in WSL, on `/mnt/c/...`) does not. The open file itself
-— diagnostics, hover, completion — works fully, because its text comes from
-the client.
+Paths: a Windows client sends Windows paths (`file:///c%3A/...`), which decode
+to `/c:/...` on the WSL side. The server prefers the `/mnt/c/...` spelling when
+that is where the document's directory actually is, so `use` imports resolve
+normally.

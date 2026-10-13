@@ -1,0 +1,30 @@
+# The Zed "LSP Addon" stub extension
+# (https://github.com/zhcn000000/zed-customlsp). Its only job is to let Zed's
+# settings name language servers that no built-in adapter has registered; the
+# server command itself comes from `lsp.<name>.binary` in settings.json.
+#
+# `extension.wasm` next to this file is that project's stub, unmodified — its
+# sha256 is recorded in ../README.md, and it is not committed (see .gitignore).
+
+id = "lspaddon"
+name = "LSP Addon"
+version = "0.1.0"
+description = "Registers language server names configured from settings"
+authors = ["zhcn000000"]
+schema_version = 1
+
+[lib]
+kind = "Rust"
+version = "0.7.0"
+
+[language_servers.oby]
+name = "oby"
+language = "Oby"
+
+# If Zed refuses the grammar-less `Oby` language (it may require a grammar),
+# attach to a carrier language instead — one you never otherwise open — and
+# map `oby` to it in settings (`"file_types": {"Starlark": ["oby"]}`):
+#
+# [language_servers.oby]
+# name = "oby"
+# language = "Starlark"
