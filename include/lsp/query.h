@@ -3,6 +3,10 @@
 
 #include <stddef.h>
 
+#include "compiler/ast.h"
+#include "compiler/lexer.h"
+#include "compiler/type.h"
+
 /* A zero-based position: `character` counts from the start of the line, in the
    negotiated position encoding — bytes for "utf-8", UTF-16 code units for the
    protocol default "utf-16" (see `lsp/json.h`'s neighbors, §4.1 of the plan). */
@@ -30,5 +34,26 @@ LspPosition lsp_position_of(const char *source, size_t source_len,
    rounded down when the position falls inside a character. */
 size_t lsp_offset_of(const char *source, size_t source_len,
                      LspPosition position, const char *encoding);
+
+/* What sits under the cursor: the innermost node whose token covers the byte
+   `offset`, with the symbol and type sema recorded for it where it did. */
+typedef struct {
+    ASTNode *node;
+    Symbol  *sym;
+    Type    *type;
+} LspTarget;
+
+/* Tokens from other files (imports, cloned generics) never match `source`, so
+   a target is always within the document being asked about. */
+LspTarget lsp_target_at(ASTNode *program, const char *source, size_t source_len,
+                        size_t offset);
+
+/* The declaration `target` points at — `sym->decl`, then `sym->decl_tok`, then
+   the type's `decl_tok`. False when nothing is recorded. */
+bool lsp_target_decl_token(const LspTarget *target, Token *out);
+
+/* True when `tok`'s text lies inside `source[0..source_len)` — the same-file
+   test that keeps a definition from jumping into another file. */
+bool lsp_token_in_source(const char *source, size_t source_len, Token tok);
 
 #endif // OBY_LSP_QUERY_H

@@ -1337,6 +1337,9 @@ static ASTNode *parse_param(Parser *p) {
 
     const char *name = NULL;
     ASTNode *type = NULL;
+    /* The node anchors at the parameter's name when it has one — that is what
+       diagnostics and tooling point at — else at the type it is. */
+    Token at = first->token;
 
     if (check(p, TOKEN_IDENTIFIER)) {
         /* `type name` */
@@ -1344,16 +1347,18 @@ static ASTNode *parse_param(Parser *p) {
         advance(p);
         name = strndup(n.start, n.length);
         type = first;
+        at = n;
     } else if (first->kind == AST_PATH && array_length(first->as.path.parts) == 1) {
         /* bare `name` */
         PathSegment *seg = (PathSegment *)array_get(first->as.path.parts, 0);
         name = seg->name;
+        at = seg->tok;
     } else {
         /* receiver type only, e.g. `(int)` */
         type = first;
     }
 
-    ASTNode *node = ast_node_new(p->arena, AST_PARAM, first->token);
+    ASTNode *node = ast_node_new(p->arena, AST_PARAM, at);
     node->as.param.type = type;
     node->as.param.name = name;
     return node;

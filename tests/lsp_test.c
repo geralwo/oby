@@ -112,7 +112,8 @@ int main(void) {
     char init_expected[512];
     snprintf(init_expected, sizeof init_expected,
              "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"capabilities\":{"
-             "\"textDocumentSync\":1,\"positionEncoding\":\"utf-16\"},"
+             "\"textDocumentSync\":1,\"hoverProvider\":true,\"definitionProvider\":true,"
+             "\"positionEncoding\":\"utf-16\"},"
              "\"serverInfo\":{\"name\":\"oby\",\"version\":\"%s\"}}}",
              oby_version_str);
     const char *publish_clean =
@@ -187,6 +188,68 @@ int main(void) {
         expect_contains(frames, 1, "unknown name 'nope'", "the message survives");
         expect_frame(frames, 2, publish_clear, "a fix clears the diagnostics");
         expect_frame(frames, 3, publish_clear, "closing clears them too");
+        free_frames(frames);
+        free(s.data);
+    }
+
+    /* ---- hover and definition through a real session ---- */
+    {
+        Session s = {0};
+        const char *publish_clean_h =
+            "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/publishDiagnostics\","
+            "\"params\":{\"uri\":\"file:///tmp/h.oby\",\"diagnostics\":[]}}";
+        session_add(&s, init_request);
+        session_add(&s, "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didOpen\",\"params\":"
+                        "{\"textDocument\":{\"uri\":\"file:///tmp/h.oby\",\"languageId\":\"oby\","
+                        "\"version\":1,\"text\":\"f = (int a) -> int {\\n\\treturn a\\n}\\nx = f(1)\\n\"}}}");
+        session_add(&s, "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"textDocument/hover\","
+                        "\"params\":{\"textDocument\":{\"uri\":\"file:///tmp/h.oby\"},"
+                        "\"position\":{\"line\":1,\"character\":8}}}");
+        session_add(&s, "{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"textDocument/definition\","
+                        "\"params\":{\"textDocument\":{\"uri\":\"file:///tmp/h.oby\"},"
+                        "\"position\":{\"line\":1,\"character\":8}}}");
+        session_add(&s, "{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"textDocument/hover\","
+                        "\"params\":{\"textDocument\":{\"uri\":\"file:///tmp/h.oby\"},"
+                        "\"position\":{\"line\":3,\"character\":4}}}");
+        session_add(&s, "{\"jsonrpc\":\"2.0\",\"id\":8,\"method\":\"textDocument/definition\","
+                        "\"params\":{\"textDocument\":{\"uri\":\"file:///tmp/h.oby\"},"
+                        "\"position\":{\"line\":3,\"character\":4}}}");
+        session_add(&s, "{\"jsonrpc\":\"2.0\",\"id\":9,\"method\":\"textDocument/hover\","
+                        "\"params\":{\"textDocument\":{\"uri\":\"file:///tmp/h.oby\"},"
+                        "\"position\":{\"line\":2,\"character\":0}}}");
+        session_add(&s, "{\"jsonrpc\":\"2.0\",\"id\":10,\"method\":\"shutdown\"}");
+        session_add(&s, "{\"jsonrpc\":\"2.0\",\"method\":\"exit\"}");
+
+        Array *frames;
+        int status = run_session(&s, &frames);
+        check(status == 0, "the hover session shuts down cleanly");
+        check(array_length(frames) == 8, "one frame per request");
+        expect_frame(frames, 0, init_expected, "the initialize response names the providers");
+        expect_frame(frames, 1, publish_clean_h, "the opened document is clean");
+        expect_frame(frames, 2,
+                     "{\"jsonrpc\":\"2.0\",\"id\":5,\"result\":{\"contents\":{"
+                     "\"kind\":\"markdown\",\"value\":\"```oby\\nint\\n```\"}}}",
+                     "hover shows a parameter's type");
+        expect_frame(frames, 3,
+                     "{\"jsonrpc\":\"2.0\",\"id\":6,\"result\":"
+                     "{\"uri\":\"file:///tmp/h.oby\",\"range\":{"
+                     "\"start\":{\"line\":0,\"character\":9},"
+                     "\"end\":{\"line\":0,\"character\":10}}}}",
+                     "definition jumps to the parameter");
+        expect_frame(frames, 4,
+                     "{\"jsonrpc\":\"2.0\",\"id\":7,\"result\":{\"contents\":{"
+                     "\"kind\":\"markdown\",\"value\":\"```oby\\n(int) -> int\\n```\"}}}",
+                     "hover shows a signature");
+        expect_frame(frames, 5,
+                     "{\"jsonrpc\":\"2.0\",\"id\":8,\"result\":"
+                     "{\"uri\":\"file:///tmp/h.oby\",\"range\":{"
+                     "\"start\":{\"line\":0,\"character\":0},"
+                     "\"end\":{\"line\":0,\"character\":1}}}}",
+                     "definition jumps to the declaration");
+        expect_frame(frames, 6, "{\"jsonrpc\":\"2.0\",\"id\":9,\"result\":null}",
+                     "hover over punctuation is null");
+        expect_frame(frames, 7, "{\"jsonrpc\":\"2.0\",\"id\":10,\"result\":null}",
+                     "shutdown responds null");
         free_frames(frames);
         free(s.data);
     }
@@ -372,6 +435,21 @@ int main(void) {
         check(lsp_offset_of(short_line, slen, far, "utf-8") == 2,
               "an over-long character clamps");
         check(lsp_line_start(short_line, slen, 1) == 3, "line starts are found");
+    }
+
+    /* ---- the same-file test for tokens ---- */
+    {
+        const char *text = "abc";
+        const char *other = "zzz";
+        Token inside = {0};
+        inside.start = text + 1;
+        inside.length = 1;
+        Token outside = {0};
+        outside.start = other;
+        outside.length = 1;
+        check(lsp_token_in_source(text, 3, inside), "a token inside the source");
+        check(!lsp_token_in_source(text, 3, outside),
+              "a token from another buffer is refused");
     }
 
     if (failures) {

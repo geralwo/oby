@@ -5,6 +5,7 @@
 
 #include "core/version.h"
 #include "compiler/frontend.h"
+#include "compiler/type.h"
 #include "lsp/json.h"
 #include "lsp/query.h"
 #include "lsp/server.h"
@@ -23,7 +24,7 @@ typedef struct LspDocument {
     char *uri;
     char *path;
     long long version;
-    char *source;         /* owned */
+    char *source;         /* borrowed from `fe`: the buffer its tokens point into */
     size_t source_len;
     Frontend fe;          /* the checked program; its diag captures diagnostics */
     struct LspDocument *next;
@@ -89,10 +90,9 @@ static LspDocument *doc_find(LspServer *s, const char *uri) {
 }
 
 static void doc_free(LspDocument *doc) {
-    frontend_free(&doc->fe);   /* safe on a zeroed frontend too */
+    frontend_free(&doc->fe);   /* frees the source buffer too */
     free(doc->uri);
     free(doc->path);
-    free(doc->source);
     free(doc);
 }
 
@@ -116,13 +116,22 @@ static const char *doc_label(LspDocument *doc) {
     return doc->path ? doc->path : doc->uri;
 }
 
-/* Parse and typecheck the document's text with capture on. The previous run's
-   arena goes first, like the CLI's Frontend cycles. */
-static void doc_check(LspDocument *doc) {
+/* Parse and typecheck `text` with capture on, replacing the previous run (its
+   arena goes first, like the CLI's Frontend cycles). The frontend owns the
+   source buffer from here on and `doc->source` borrows it: the AST's tokens
+   point into that buffer, so queries must use the very same one. */
+static void doc_check(LspDocument *doc, const char *text) {
     frontend_free(&doc->fe);
     diag_set_capture(&doc->fe.diag, true);
-    char *copy = copy_string(doc->source);
-    if (copy) frontend_run(&doc->fe, doc_label(doc), copy);
+    char *copy = copy_string(text);
+    if (!copy) {
+        doc->source = NULL;
+        doc->source_len = 0;
+        return;
+    }
+    frontend_run(&doc->fe, doc_label(doc), copy);
+    doc->source = doc->fe.source;
+    doc->source_len = doc->source ? strlen(doc->source) : 0;
 }
 
 /* Publish one document's diagnostics. `doc` NULL publishes the empty list,
@@ -198,17 +207,10 @@ static void doc_open(LspServer *s, const JsonValue *params) {
     json_int(json_get(td, "version"), &version);
     doc->version = version;
 
-    doc->source = copy_string(text);
-    if (!doc->source) {
-        doc_free(doc);
-        return;
-    }
-    doc->source_len = strlen(doc->source);
-
     doc->next = s->docs;
     s->docs = doc;
 
-    doc_check(doc);
+    doc_check(doc, text);
     send_diagnostics(s, doc->uri, doc);
 }
 
@@ -233,18 +235,12 @@ static void doc_change(LspServer *s, const JsonValue *params) {
     const char *text = json_string(json_get(last, "text"));
     if (!text) return;
 
-    char *copy = copy_string(text);
-    if (!copy) return;
-    free(doc->source);
-    doc->source = copy;
-    doc->source_len = strlen(copy);
-
     /* The spec: this version is the one after all the changes in the list. */
     long long version = doc->version;
     json_int(json_get(td, "version"), &version);
     doc->version = version;
 
-    doc_check(doc);
+    doc_check(doc, text);
     send_diagnostics(s, doc->uri, doc);
 }
 
@@ -284,14 +280,113 @@ static void handle_initialize(LspServer *s, const char *id, size_t id_len,
     s->encoding = encoding;
     s->initialized = true;
 
-    /* The providers grow as the phases land: hover and definition in Phase 2,
-       completion and documentSymbol in Phase 3. */
+    /* The providers grow as the phases land: completion and documentSymbol
+       arrive in Phase 3. */
     frame_writef(s->out,
                  "{\"jsonrpc\":\"2.0\",\"id\":%.*s,\"result\":{\"capabilities\":{"
                  "\"textDocumentSync\":1,"
+                 "\"hoverProvider\":true,"
+                 "\"definitionProvider\":true,"
                  "\"positionEncoding\":\"%s\"},"
                  "\"serverInfo\":{\"name\":\"oby\",\"version\":\"%s\"}}}",
                  (int)id_len, id, s->encoding, oby_version_str);
+}
+
+/* The document and byte offset a position request names. False when the
+   document is not open or the params do not parse. */
+static bool position_params(LspServer *s, const JsonValue *params,
+                            LspDocument **out_doc, size_t *out_offset) {
+    const JsonValue *td = json_get(params, "textDocument");
+    const char *uri = json_string(json_get(td, "uri"));
+    if (!uri) return false;
+    LspDocument *doc = doc_find(s, uri);
+    if (!doc) return false;
+
+    long long line = 0, character = 0;
+    const JsonValue *pos = json_get(params, "position");
+    json_int(json_get(pos, "line"), &line);
+    json_int(json_get(pos, "character"), &character);
+    if (line < 0 || line > 0x7FFFFFFFLL || character < 0 || character > 0x7FFFFFFFLL)
+        return false;
+
+    LspPosition where = { (int)line, (int)character };
+    *out_doc = doc;
+    *out_offset = lsp_offset_of(doc->source, doc->source_len, where, s->encoding);
+    return true;
+}
+
+/* The target under the request's position, with the spec's nudge: clients put
+   the position just left of the character being pointed at. */
+static LspTarget target_at(LspDocument *doc, size_t offset) {
+    LspTarget target = lsp_target_at(doc->fe.program, doc->source, doc->source_len, offset);
+    if (!target.node && offset > 0)
+        target = lsp_target_at(doc->fe.program, doc->source, doc->source_len, offset - 1);
+    return target;
+}
+
+static void handle_hover(LspServer *s, const char *id, size_t id_len,
+                         const JsonValue *params) {
+    LspDocument *doc = NULL;
+    size_t offset = 0;
+    if (!position_params(s, params, &doc, &offset) || !doc->fe.program) {
+        send_result(s, id, id_len, "null");
+        return;
+    }
+
+    LspTarget target = target_at(doc, offset);
+    Type *type = target.type ? target.type : (target.sym ? target.sym->type : NULL);
+    if (!type || type->kind == TYPE_UNKNOWN) {
+        send_result(s, id, id_len, "null");
+        return;
+    }
+
+    char name[256];
+    type_str(type, name, sizeof name);
+
+    JsonBuf b;
+    json_buf_init(&b);
+    json_buf_printf(&b, "{\"contents\":{\"kind\":\"markdown\",\"value\":\"```oby\\n");
+    json_buf_escape(&b, name);
+    json_buf_printf(&b, "\\n```\"}}");
+    if (!b.oom) send_result(s, id, id_len, b.data);
+    json_buf_free(&b);
+}
+
+static void handle_definition(LspServer *s, const char *id, size_t id_len,
+                              const JsonValue *params) {
+    LspDocument *doc = NULL;
+    size_t offset = 0;
+    if (!position_params(s, params, &doc, &offset) || !doc->fe.program) {
+        send_result(s, id, id_len, "null");
+        return;
+    }
+
+    Token tok;
+    LspTarget target = target_at(doc, offset);
+    /* Same-file only: the bounds check refuses tokens from imports and the
+       prelude, so the jump never leaves the document. */
+    if (!lsp_target_decl_token(&target, &tok) ||
+        !lsp_token_in_source(doc->source, doc->source_len, tok)) {
+        send_result(s, id, id_len, "null");
+        return;
+    }
+
+    size_t start = (size_t)(tok.start - doc->source);
+    size_t end = start + (tok.length > 0 ? tok.length : 1);
+    if (end > doc->source_len) end = doc->source_len;
+    LspPosition at = lsp_position_of(doc->source, doc->source_len, start, s->encoding);
+    LspPosition to = lsp_position_of(doc->source, doc->source_len, end, s->encoding);
+
+    JsonBuf b;
+    json_buf_init(&b);
+    json_buf_printf(&b, "{\"uri\":\"");
+    json_buf_escape(&b, doc->uri);
+    json_buf_printf(&b,
+                    "\",\"range\":{\"start\":{\"line\":%d,\"character\":%d},"
+                    "\"end\":{\"line\":%d,\"character\":%d}}}",
+                    at.line, at.character, to.line, to.character);
+    if (!b.oom) send_result(s, id, id_len, b.data);
+    json_buf_free(&b);
 }
 
 /* Handle one parsed message. Returns true when `exit` arrived. */
@@ -350,6 +445,15 @@ static bool handle_message(LspServer *s, JsonValue *msg) {
     }
     if (strcmp(method, "textDocument/didClose") == 0) {
         doc_close(s, json_get(msg, "params"));
+        return false;
+    }
+
+    if (strcmp(method, "textDocument/hover") == 0) {
+        if (is_request) handle_hover(s, id, id_len, json_get(msg, "params"));
+        return false;
+    }
+    if (strcmp(method, "textDocument/definition") == 0) {
+        if (is_request) handle_definition(s, id, id_len, json_get(msg, "params"));
         return false;
     }
 
