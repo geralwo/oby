@@ -6,6 +6,21 @@
 #include "core/value.h"
 
 /*
+ * Base for every heap object. The kind tag lets a Value identify what it
+ * points at. Objects are freed manually (there is no GC).
+ *
+ * `String` and `Array` are built-in primitives, not `Obj`s; `VAL_OBJ` is for
+ * dynamic and nominal `{}` objects.
+ */
+typedef enum {
+    OBJ_OBJECT,
+} ObjKind;
+
+struct Obj {
+    ObjKind kind;
+};
+
+/*
  * A `{}` object (dynamic or nominal): an Obj header plus a byte buffer holding
  * its fields. The compiler lays each field out at a byte offset, sized from its
  * type, so packed values (`vec2i`, `int`, ...) are stored inline and tagged

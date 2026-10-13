@@ -4,11 +4,11 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
-#include "core/obj.h"
 #include "core/string.h"
 #include "core/array.h"
 
 typedef struct Function Function;  /* vm/function.h */
+typedef struct Obj Obj;            /* the heap object base (object.h) */
 
 /* A closure: a compiled function plus its captured state. The captured bytes
    are laid out using the function's `up_off`/`up_size` tables, so a function's
