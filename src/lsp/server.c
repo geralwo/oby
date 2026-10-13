@@ -11,11 +11,6 @@
 #include "lsp/server.h"
 #include "lsp/uri.h"
 
-#if defined(_WIN32)
-#include <fcntl.h>
-#include <io.h>
-#endif
-
 /* An open document: the URI exactly as the client sent it (it goes back out
    verbatim), the path behind it when it is a file, and the editor's text. The
    text is the truth while the document is open — the file on disk may be
@@ -472,12 +467,6 @@ static bool handle_message(LspServer *s, JsonValue *msg) {
 /* ------------------------------------------------------------------ */
 
 int lsp_server_run(FILE *in, FILE *out) {
-#if defined(_WIN32)
-    /* Framing is byte-exact: text mode would rewrite the CRLFs. */
-    _setmode(_fileno(in), _O_BINARY);
-    _setmode(_fileno(out), _O_BINARY);
-#endif
-
     LspServer srv;
     memset(&srv, 0, sizeof srv);
     srv.in = in;

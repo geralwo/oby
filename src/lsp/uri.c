@@ -1,5 +1,3 @@
-#include <string.h>
-
 #include "lsp/uri.h"
 
 static bool is_hex(char c) {
@@ -33,15 +31,6 @@ bool uri_to_path(const char *uri, char *buf, size_t cap) {
         buf[o++] = c;
     }
     buf[o] = '\0';
-
-#if defined(_WIN32)
-    /* `file:///C:/x` decodes to `/C:/x`; drop the extra slash, since the drive
-       letter is the path's root. (Separators stay `/`: Windows accepts them.) */
-    if (o >= 3 && buf[0] == '/' && buf[2] == ':' &&
-        ((buf[1] >= 'A' && buf[1] <= 'Z') || (buf[1] >= 'a' && buf[1] <= 'z'))) {
-        memmove(buf, buf + 1, o);
-    }
-#endif
     return true;
 }
 
@@ -51,23 +40,6 @@ bool path_to_uri(const char *path, char *buf, size_t cap) {
         if (o + 1 >= cap) return false;
         buf[o++] = *p;
     }
-
-#if defined(_WIN32)
-    /* `C:\x` -> `file:///C:/x`, with the drive letter uppercased (clients
-       differ on the casing; leading with the canonical form is safest). */
-    if (path[0] && path[1] == ':') {
-        char drive = path[0];
-        if (drive >= 'a' && drive <= 'z') drive = (char)(drive - 'a' + 'A');
-        if (o + 3 >= cap) return false;
-        buf[o++] = '/';
-        buf[o++] = drive;
-        buf[o++] = ':';
-        path += 2;
-    } else if (path[0] != '/') {
-        if (o + 1 >= cap) return false;
-        buf[o++] = '/';
-    }
-#endif
 
     static const char digits[] = "0123456789ABCDEF";
     for (const char *p = path; *p; p++) {

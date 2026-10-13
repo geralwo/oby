@@ -4,9 +4,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
-#if !defined(_WIN32)
 #include <sys/stat.h>
-#endif
 
 #include "util.h"
 #include "core/bundle.h"
@@ -253,10 +251,8 @@ static int bundle_command(const char *argv0, const char *entry, const char *outp
         return 1;
     }
 
-#if !defined(_WIN32)
     if (chmod(output, 0755) != 0)
         fprintf(stderr, "warning: cannot make '%s' executable\n", output);
-#endif
     printf("%s: %zu bytes (oby %zu, image %zu)\n", output,
            self_len + image_len + OBY_BUNDLE_FOOTER_SIZE, self_len, image_len);
     return 0;
