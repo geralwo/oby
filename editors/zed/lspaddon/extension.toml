@@ -1,15 +1,16 @@
-# The Zed "LSP Addon" stub extension
-# (https://github.com/zhcn000000/zed-customlsp). Its only job is to let Zed's
-# settings name language servers that no built-in adapter has registered; the
-# server command itself comes from `lsp.<name>.binary` in settings.json.
+# The Zed extension for OBY: a language with our tree-sitter grammar and our
+# language server.
 #
-# `extension.wasm` next to this file is that project's stub, unmodified — its
-# sha256 is recorded in ../README.md, and it is not committed (see .gitignore).
+# The wasm next to this file is the "LSP Addon" stub
+# (https://github.com/zhcn000000/zed-customlsp), unmodified. Zed refuses to
+# start a language server whose name no extension has registered, and the stub
+# is what registers `oby`; the command itself comes from `lsp.<name>.binary` in
+# settings.json. Its sha256 is recorded in ../README.md and it is not committed.
 
 id = "lspaddon"
 name = "LSP Addon"
 version = "0.1.0"
-description = "Registers language server names configured from settings"
+description = "OBY: grammar for highlighting, and the language server name"
 authors = ["zhcn000000"]
 schema_version = 1
 
@@ -17,14 +18,15 @@ schema_version = 1
 kind = "Rust"
 version = "0.7.0"
 
+# The grammar lives in this same repository, in the directory next door; `path`
+# says where inside the clone it is. Zed compiles `src/parser.c` itself and
+# never runs the tree-sitter CLI, so the generated parser is committed
+# alongside `grammar.js`. `rev` is a commit of this repository that has it.
+[grammars.oby]
+repository = "https://github.com/geralwo/oby"
+path = "editors/tree-sitter-oby"
+rev = "2f2fbe783407e5b70a4d742e718e5936d62e83e7"
+
 [language_servers.oby]
 name = "oby"
 language = "Oby"
-
-# If Zed refuses the grammar-less `Oby` language (it may require a grammar),
-# attach to a carrier language instead — one you never otherwise open — and
-# map `oby` to it in settings (`"file_types": {"Starlark": ["oby"]}`):
-#
-# [language_servers.oby]
-# name = "oby"
-# language = "Starlark"

@@ -84,8 +84,9 @@ indent = { tab-width = 4, unit = "\t" }
 language-servers = ["oby"]
 ```
 
-Highlighting needs a tree-sitter grammar, which does not exist yet; the
-language server works either way.
+Highlighting needs a tree-sitter grammar: one now exists in
+`editors/tree-sitter-oby/`, and Helix will pick it up once it is published
+somewhere it can fetch from. The language server works either way.
 
 ## Emacs (eglot)
 
@@ -106,7 +107,13 @@ so it needs a small client extension (`vscode-languageclient` with
 wrinkle that works in our favor: the server *command* lives in settings
 (`lsp.oby.binary`), so only the name registration needs an extension.
 `editors/zed/README.md` lays out the routes, including a no-Rust one that
-reuses a stub wasm. Neovim, Helix, and Emacs work with no extra artifact.
+reuses a stub wasm.
+
+Highlighting is the tree-sitter grammar in `editors/tree-sitter-oby/`. It is
+wired into Zed, which reaches it inside this repository through the extension's
+`path` field. Helix and Neovim fetch a grammar by repository instead, so they
+would need the grammar as a repository of its own — a copy of that directory
+with the grammar at its root. Until then they get the language server only.
 
 ## The server in WSL
 

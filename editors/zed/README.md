@@ -19,8 +19,11 @@ Put `"lsp": { "oby": ... }` in settings without one and it complains
 [closed as not planned][issue] — *"Zed currently only allows LSP names that an
 extension or built-in adapter has registered."*
 
-So we borrow someone else's no-op extension just to get the name registered. The
-actual command still comes from our settings; the extension does nothing.
+So we borrow someone else's no-op extension to register the name. The actual
+command still comes from our settings; the stub does nothing. The *rest* of the
+extension is ours: `extension.toml` also points Zed at the tree-sitter grammar
+in `editors/tree-sitter-oby/`, which is what gives `.oby` its own language with
+highlighting, bracket matching and an outline.
 
 [issue]: https://github.com/zed-industries/zed/issues/52653
 
@@ -88,7 +91,13 @@ up — no shell, no path mangling. On a native build it's just
 
 Run `zed: extensions` from the command palette (or just restart Zed), then open
 any `.oby` file. Diagnostics, hover, completion, and the outline come from
-`oby --lsp`.
+`oby --lsp`, and the colours come from the grammar.
+
+Zed fetches the grammar from `https://github.com/geralwo/oby` at the revision
+`extension.toml` names, and builds the copy in `editors/tree-sitter-oby/` that
+that revision holds. After changing the grammar, commit it and bump `rev`, or
+Zed keeps building the old one. (The repository has to be public for Zed to
+clone it, or the clone needs credentials.)
 
 ## Optional — jump into the prelude
 
@@ -144,11 +153,11 @@ holds `core.oby`, and you fall back to the embedded copy.
 `Cargo.toml` + `src/lib.rs`, where `lib.rs` hands back the command directly.
 Zed builds dev extensions itself (`Install Dev Extension`), which needs a Rust
 toolchain with the `wasm32-wasip1` target — nothing on this machine has Rust
-today, so it isn't written. Worth it only if we stop reusing the stub.
+today, so it isn't written. Worth it only if we stop reusing the stub, and it
+is now the *only* thing left that the stub provides (the grammar is ours).
 
-**The real thing.** A tree-sitter grammar for OBY (`grammar.js` plus
-`highlights.scm`, `brackets.scm`, `outline.scm`, `indents.scm`) and an
-`extension.toml` pointing at it with `repository` + `rev`. Zed fetches and
-compiles the grammar itself, so users need no toolchain, and `.oby` finally gets
-its own language with highlighting — it replaces the Neovim syntax file's role.
-That's the "editor packages" item in the LSP plan's deferred list.
+**A grammar repository of its own.** The grammar sits in this repository and
+`extension.toml` reaches it with `path`, which is what a remote for `oby` alone
+buys. Its own `tree-sitter-oby` repository would instead be what lets Neovim and
+Helix use the grammar, since they fetch one by repository without a `path` — and
+it would keep the committed `src/parser.c` out of this repository's history.

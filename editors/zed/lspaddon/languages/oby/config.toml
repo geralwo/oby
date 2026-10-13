@@ -1,9 +1,8 @@
-# The OBY language, with no tree-sitter grammar: `oby` files get the language,
-# Zed's other language features stay off, and the LSP from `../extension.toml`
-# attaches. If Zed rejects this (a grammar may be required), use the
-# carrier-language fallback described in ../extension.toml and ../../README.md.
+# The OBY language: `*.oby` files, highlighted by the grammar in
+# `editors/tree-sitter-oby/` and analysed by `oby --lsp`.
 
 name = "Oby"
+grammar = "oby"
 path_suffixes = ["oby"]
 line_comments = ["// "]
 tab_size = 4
