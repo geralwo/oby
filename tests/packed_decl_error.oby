@@ -1,0 +1,8 @@
+vec2i = packed int[2] {
+	x = vec2i[0]
+	y = vec2i[5]
+	z = int[0]
+}
+
+bad = packed nope[2]
+int = byte[4]

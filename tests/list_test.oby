@@ -1,0 +1,65 @@
+// `List<T>` from the prelude: a growable, element-typed list. `Map` and `Pair`
+// are covered by `map_test`.
+
+l = List<int>()
+l.push(1)
+l.push(2)
+l.push(3)
+print("${l.length()} ${l.at(0)} ${l.index_of(2)} ${l.contains(9)}\n")
+l.set(0, 10)
+print("${l.at(0)}\n")
+print("${l.pop()} ${l.length()}\n")
+l.insert(0, 7)
+print("${l.at(0)} ${l.at(1)}\n")
+print("${l.remove(0)} ${l.length()}\n")
+print("${l.is_empty()}\n")
+
+// A static factory per instantiation, and a copy that shares nothing.
+from_array = List<int>::with([4, 5, 6])
+print("${from_array.length()} ${from_array.at(2)}\n")
+copied = from_array.clone()
+copied.push(9)
+print("${from_array.length()} ${copied.length()}\n")
+from_array.clear()
+print("${from_array.length()}\n")
+
+// A second instantiation: `List<String>` needs `==` on String, nothing else.
+words = List<String>()
+words.push("alpha")
+words.push("beta")
+beta = "beta"
+gamma = "gamma"
+print("${words.contains(beta)} ${words.index_of(gamma)}\n")
+
+// Sorting: in place with `<`, or with a comparator, or as a copy.
+s = List<int>::with([3, 1, 2])
+s.sort()
+print("${s.at(0)} ${s.at(1)} ${s.at(2)}\n")
+
+t = List<String>::with(["pear", "apple"])
+u = t.sorted()
+print("${u.at(0)} ${u.at(1)} ${t.at(0)}\n")
+
+desc = (int a, int b) -> int { return b - a }
+s.sort_by(desc)
+print("${s.at(0)} ${s.at(2)}\n")
+
+// `map`/`fold` take the method's own type parameter; `filter` does not need one.
+doubled = s.map((int x) -> int { return x * 2 })
+print("${doubled.length()} ${doubled.at(0)} ${doubled.at(2)}\n")
+
+evens = s.filter((int x) -> int {
+	if x % 2 == 0 {
+		return 1
+	}
+	return 0
+})
+print("${evens.length()} ${evens.at(0)}\n")
+
+total = s.fold(0, (int acc, int x) -> int { return acc + x })
+print("${total}\n")
+
+// The mapped type may differ from the element type.
+words2 = s.map((int x) -> String { return int::to_str(x * 10) })
+print(words2.at(0))
+print("\n")

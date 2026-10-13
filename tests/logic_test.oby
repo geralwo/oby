@@ -1,0 +1,32 @@
+// `and`, `or` and `not` on integers, with short-circuiting.
+print(int::to_str(1 and 0))
+print(int::to_str(1 and 1))
+print(int::to_str(0 and 1))
+print(int::to_str(0 or 0))
+print(int::to_str(1 or 1))
+print(int::to_str(0 or 5))
+print(int::to_str(2 and 3))
+print(int::to_str(not 0))
+print(int::to_str(not 7))
+
+// Precedence: `and` binds tighter than `or`.
+print(int::to_str(0 and 0 or 1))
+print(int::to_str(1 or 0 and 0))
+
+// Short-circuit: the right operand is not evaluated when the left decides.
+x = 0
+print(int::to_str(x and (1 / x)))
+print(int::to_str(1 or (1 / x)))
+
+// A function call on the right is skipped too.
+calls = 0
+bump = () -> int {
+	$calls += 1
+	return 1
+}
+r = 0 and bump()
+print(int::to_str(r))
+print(int::to_str(calls))
+r = 1 or bump()
+print(int::to_str(r))
+print(int::to_str(calls))

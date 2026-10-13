@@ -1,0 +1,6 @@
+// Bitwise operators are integer-only, and a constant shift count must fit.
+x = 1.5 & 2
+y = "a" | 1
+z = 1 << 32
+w = 1 << -1
+v = ~1.5

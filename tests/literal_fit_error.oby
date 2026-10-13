@@ -1,0 +1,8 @@
+// A literal that does not fit its context is an error, not a truncation.
+byte b = 300
+uint u = -1
+int x = 3000000000
+int64 big = 99999999999999999999
+x = -u
+byte h = 0x100
+huge_hex = 0x10000000000000000

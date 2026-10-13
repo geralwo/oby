@@ -1,0 +1,37 @@
+// Inline function types: parens that are not a function type's parameter list
+// group one type, so a function type can be parenthesized and take a suffix.
+
+check = (int cond) {
+	print(int::to_str(1 / cond))
+}
+
+dbl = (int x) -> int { return x * 2 }
+trp = (int x) -> int { return x * 3 }
+
+// An inline element type, no alias needed.
+((int) -> int)[] fs = [dbl, trp]
+check(fs.length == 2)
+check(fs[0](2) == 4)
+check(fs[1](2) == 6)
+
+// Inline parameter and return types.
+apply = (((int) -> int) f, int x) -> int { return f(x) }
+check(apply(dbl, 5) == 10)
+
+pick = (int n) -> ((int) -> int) {
+	if n > 0 {
+		return dbl
+	}
+	return trp
+}
+check(pick(1)(2) == 4)
+check(pick(0)(2) == 6)
+
+// As a generic argument.
+l = List<((int) -> int)>::new()
+l.push(trp)
+check(l.at(0)(3) == 9)
+
+// A grouped non-function type takes a suffix too.
+(int)[] xs = [1, 2]
+check(xs[1] == 2)

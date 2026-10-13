@@ -1,0 +1,6 @@
+// A guard must be a value that can be tested.
+switch 1 {
+case 1 if print("guard\n") {
+	print("one\n")
+}
+}

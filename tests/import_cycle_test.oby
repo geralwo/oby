@@ -1,0 +1,6 @@
+// `lib/import_cycle_lib.oby` imports this file back. The entry is registered in
+// the pragma-once set before its imports are collected, so the cycle is a
+// no-op; compiling this file twice would print "cycle ok" twice.
+use "lib/import_cycle_lib.oby"
+
+print("cycle ok\n")

@@ -1,0 +1,119 @@
+// String helpers: slice, from_bytes, parsing, searching, splitting, trimming,
+// and building text (case conversion, replace, join, lines).
+
+check = (int cond) {
+	print(int::to_str(1 / cond))
+}
+
+s = "hello, world"
+check(s.slice(0, 5) == "hello")
+check(s.slice(7, 12) == "world")
+check(s.slice(0, 0) == "")
+check(s.slice(5, 2) == "")
+check(s.slice(-5, 100) == s)
+
+// Parsing numbers; text that is not a number is 0.
+a = "42"
+check(a.to_int() == 42)
+b = "  -7 "
+check(b.to_int() == -7)
+check("x9".to_int() == 0)
+check("010".to_int() == 10)          // no octal
+check("0x1F".to_int() == 31)
+check("0b1010".to_int() == 10)
+check("-0x10".to_int() == -16)
+check("  0b11  ".to_int() == 3)
+check("0x".to_int() == 0)            // no digits: not a number
+check("0b2".to_int() == 0)
+check("12x".to_int() == 0)           // trailing junk: not a number
+c = "3.5"
+check(c.to_float() * 2.0 == 7.0)
+d = "1e2"
+check(d.to_float() == 100.0)
+e = "not"
+check(e.to_float() == 0.0)
+
+// A String built from bytes.
+buf = ['h', 'e', 'l', 'l', 'o']
+check(String::from_bytes(buf, 0, 5) == "hello")
+check(String::from_bytes(buf, 1, 3) == "ell")
+
+// Searching.
+s2 = "hello, world"
+comma = ","
+check(s2.find(comma) == 5)
+check(s2.find("zz") == -1)
+check(s2.find_from("l", 4) == 10)
+check(s2.contains("world") == 1)
+check(s2.contains("banana") == 0)
+check(s2.starts_with("hello") == 1)
+check(s2.ends_with("world") == 1)
+check(s2.starts_with("world") == 0)
+check(s2.ends_with("hello") == 0)
+check("abc".find("") == 0)
+check("abc".find_from("", 2) == 2)
+check("".find("") == 0)
+check("abc".find_from("c", 2) == 2)
+
+// Splitting; a separator that touches gives empty parts.
+parts = "a,b,c".split(",")
+check(parts.length == 3)
+check(parts[0] == "a")
+check(parts[2] == "c")
+touched = "a,,b".split(",")
+check(touched.length == 3)
+check(touched[1] == "")
+check("nosep".split(",").length == 1)
+check("x".split("").length == 1)
+check("a::b".split("::").length == 2)
+
+// Trimming.
+padded = "  \t hello \n "
+check(padded.trim() == "hello")
+check(padded.trim_start() == "hello \n ")
+check(padded.trim_end() == "  \t hello")
+check("   ".trim().length == 0)
+check("".trim().length == 0)
+check("x".trim() == "x")
+
+// Blankness.
+check("   ".is_blank() == 1)
+check(" x ".is_blank() == 0)
+check("".is_blank() == 1)
+
+// Case conversion (ASCII only).
+check("Hello, World!".to_lower() == "hello, world!")
+check("Hello, World!".to_upper() == "HELLO, WORLD!")
+check("abc_123".to_upper() == "ABC_123")
+check("already".to_lower() == "already")
+check("".to_upper().length == 0)
+
+// Replacement: left to right, non-overlapping, never rescanned.
+check("a-b-c".replace("-", "+") == "a+b+c")
+check("aaa".replace("aa", "b") == "ba")
+check("abc".replace("z", "y") == "abc")
+check("abc".replace("b", "") == "ac")
+check("abc".replace("", "x") == "abc")
+check("x".replace("x", "xx") == "xx")
+check("banana".replace("na", "NA") == "baNANA")
+
+// Joining.
+check(String::join(["a", "b", "c"], "-") == "a-b-c")
+check(String::join(["a", "b"], "") == "ab")
+check(String::join(["only"], "-") == "only")
+check(String::join([], "-") == "")
+
+// Lines: LF and CRLF agree; a final newline adds no empty line.
+three = "one\ntwo\nthree".lines()
+check(three.length == 3)
+check(three[1] == "two")
+check("a\nb\n".lines().length == 2)
+crlf = "a\r\nb\r\n".lines()
+check(crlf.length == 2)
+check(crlf[0] == "a")
+check("".lines().length == 0)
+check("\n".lines().length == 1)
+check("a\n\nb".lines().length == 3)
+last = "a\n\n".lines()
+check(last.length == 2)
+check(last[1] == "")

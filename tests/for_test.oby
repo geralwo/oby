@@ -1,0 +1,70 @@
+// `for (init; cond; step) block` — C-style loop. Self-check: `1 / cond` is a
+// runtime error (nonzero exit) when the condition is false.
+
+check = (int cond) {
+	print(int::to_str(1 / cond))
+}
+
+// Sum 0..4.
+sum = 0
+for (local i = 0; i < 5; i += 1) {
+	sum += i
+}
+check(sum == 10)
+
+// `continue` runs the `step` before re-testing the condition, so the counter
+// still advances (this would spin forever otherwise).
+evens = 0
+for (local i = 0; i < 10; i += 1) {
+	if i % 2 == 1 {
+		continue
+	}
+	evens += 1
+}
+check(evens == 5)
+
+// `break` leaves the loop.
+found = 0
+for (local i = 0; i < 100; i += 1) {
+	if i == 7 {
+		found = i
+		break
+	}
+}
+check(found == 7)
+
+// Nested loops keep separate counters.
+pairs = 0
+for (local i = 0; i < 3; i += 1) {
+	for (local j = 0; j < 3; j += 1) {
+		if j == 1 {
+			continue
+		}
+		pairs += 1
+	}
+}
+check(pairs == 6)
+
+// The counter declared with `local` is scoped to the loop, so an outer binding
+// of the same name is untouched.
+i = 99
+for (local i = 0; i < 3; i += 1) {
+}
+check(i == 99)
+
+// The header can start elsewhere and step by more than one.
+total = 0
+for (local k = 10; k > 0; k -= 2) {
+	total += k
+}
+check(total == 30)
+
+// Inside a function body too.
+fac = (int n) -> int {
+	local r = 1
+	for (local i = 2; i <= n; i += 1) {
+		r *= i
+	}
+	return r
+}
+check(fac(5) == 120)

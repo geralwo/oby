@@ -1,0 +1,16 @@
+// Time: a monotonic clock and sleeping.
+//
+// `now_ms` and `now_us` count from an unspecified epoch, so only differences
+// are meaningful; they read the same clock, so `now_us() / 1000` is
+// `now_ms()`. Frame pacing looks like
+//
+//   start = Time::now_us()
+//   ...
+//   elapsed = Time::now_us() - start
+//   Time::sleep_ms(16)
+
+Time = type {}
+
+Time::sleep_ms = extern time_sleep_ms(int ms) -> void
+Time::now_ms = extern time_now_ms() -> int64
+Time::now_us = extern time_now_us() -> int64

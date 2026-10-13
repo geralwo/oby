@@ -1,0 +1,145 @@
+// Input: key polling, typed text, and the key codes.
+//
+// `Input::poll` starts a batch: it drains everything the terminal has
+// buffered into a key set, a text buffer (in arrival order), and the mouse
+// state. Every query answers about the last batch. The state lives in the
+// native, not in the script — the script cannot see or corrupt it.
+//
+// Terminal modes (raw mode, mouse reporting, size) live on `Terminal`.
+//
+// A game loop looks like:
+//
+//   Terminal::raw_mode(1)
+//   while alive {
+//       Input::poll()
+//       if Input::is_key_pressed(Input::Key::Q) { alive = 0 }
+//       if Input::is_key_pressed(Input::Key::UP) { dir = Direction::UP }
+//       tick()
+//       Time::sleep_ms(120)
+//   }
+//   Terminal::restore()
+
+Input = type {}
+
+// ASCII keys keep their byte values; the rest start at 256.
+// Must match the KEY_* defines in src/native/input.c.
+Input::Key = enum {
+	NONE = 0
+	TAB = 9
+	ENTER = 13
+	ESCAPE = 27
+	SPACE = 32
+	ZERO = 48
+	ONE = 49
+	TWO = 50
+	THREE = 51
+	FOUR = 52
+	FIVE = 53
+	SIX = 54
+	SEVEN = 55
+	EIGHT = 56
+	NINE = 57
+	A = 97
+	B = 98
+	C = 99
+	D = 100
+	E = 101
+	F = 102
+	G = 103
+	H = 104
+	I = 105
+	J = 106
+	K = 107
+	L = 108
+	M = 109
+	N = 110
+	O = 111
+	P = 112
+	Q = 113
+	R = 114
+	S = 115
+	T = 116
+	U = 117
+	V = 118
+	W = 119
+	X = 120
+	Y = 121
+	Z = 122
+	BACKSPACE = 127
+	UP = 256
+	DOWN
+	LEFT
+	RIGHT
+	INSERT
+	DELETE
+	HOME
+	END
+	PAGEUP
+	PAGEDOWN
+	F1
+	F2
+	F3
+	F4
+	F5
+	F6
+	F7
+	F8
+	F9
+	F10
+	F11
+	F12
+}
+
+// Modifier bits for `Input::mods`; queries combine with the bitwise `&`:
+//
+//   if Input::is_key_pressed(Input::Key::UP) and
+//      (Input::mods(Input::Key::UP) & Input::Mod::CTRL) != 0 { ... }
+Input::Mod = enum {
+	SHIFT = 1
+	CTRL = 2
+	ALT = 4
+}
+
+// Drain pending input: the frame tick. Returns 1 when anything arrived (a
+// key, typed text, or mouse).
+Input::poll = extern input_poll() -> int
+
+// Like `poll`, but blocks up to `timeout_ms` for input to arrive first
+// (negative waits forever). Menus stop busy-looping.
+Input::wait = extern input_wait(int timeout_ms) -> int
+
+// 1 if `key` arrived since the last poll. Letters match either case.
+Input::is_key_pressed = extern input_is_key_pressed(Input::Key key) -> int
+
+// The modifier bits `key` arrived with (0 when it did not arrive). Ctrl+letter
+// and Shift+letter fold to the letter plus the bit, so both cases report as
+// the same key.
+Input::mods = extern input_mods(Input::Key key) -> int
+
+// Printable bytes (UTF-8 included) typed since the last poll, in arrival
+// order; null when nothing was typed. The ordered channel a key set cannot
+// express — what text entry wants.
+Input::text = extern input_text() -> String
+
+// Mouse. `Terminal::mouse_mode(1)` turns SGR reporting on (and
+// `Terminal::restore` turns it off); coordinates are 0-based, like `move_to`.
+Input::Mouse = enum {
+	LEFT = 0
+	MIDDLE = 1
+	RIGHT = 2
+}
+
+// Position of the latest mouse event since the last poll.
+Input::mouse_x = extern input_mouse_x() -> int
+Input::mouse_y = extern input_mouse_y() -> int
+
+// Button edges since the last poll; `mouse_down` is the held state.
+Input::mouse_clicked = extern input_mouse_clicked(Input::Mouse button) -> int
+Input::mouse_released = extern input_mouse_released(Input::Mouse button) -> int
+Input::mouse_down = extern input_mouse_down(Input::Mouse button) -> int
+
+// 1 when the mouse moved while a button was held since the last poll.
+Input::mouse_dragged = extern input_mouse_dragged() -> int
+
+// Net wheel ticks since the last poll: positive is up.
+Input::mouse_wheel = extern input_mouse_wheel() -> int

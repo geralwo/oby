@@ -1,0 +1,5 @@
+// Type parameters must be fresh, unique names.
+
+T1 = type<T, T> { n = 0 }
+T2 = type<int> { n = 0 }
+T3 = type<> { n = 0 }

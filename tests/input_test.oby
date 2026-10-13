@@ -1,0 +1,17 @@
+// Input: the non-interactive bits. The harness has no pending input, so a
+// non-blocking wait drains nothing.
+
+check = (int cond) {
+	print(int::to_str(1 / cond))
+}
+
+check(Input::wait(0) == 0)
+check(Input::is_key_pressed(Input::Key::A) == 0)
+check(Input::mods(Input::Key::A) == 0)
+check(Input::text() == null)
+check(Input::poll() == 0)
+check(Input::mouse_clicked(Input::Mouse::LEFT) == 0)
+check(Input::mouse_down(Input::Mouse::LEFT) == 0)
+check(Input::mouse_wheel() == 0)
+check(Input::mouse_x() == 0)
+print("ok\n")

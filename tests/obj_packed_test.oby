@@ -1,0 +1,31 @@
+// Packed values as object members, laid out byte-tight.
+o = {
+	pos = vec2i(1, 2)
+	n = 5
+	name = "hi"
+	inner = { v = vec2i(7, 8) }
+}
+
+print(vec2i::to_str(o.pos))
+print(int::to_str(o.n))
+print(o.name)
+print(vec2i::to_str(o.inner.v))
+
+o.pos = vec2i(3, 4)
+print(vec2i::to_str(o.pos))
+
+// Writing one member leaves the others alone.
+o.pos.x = 9
+print(vec2i::to_str(o.pos))
+
+o.inner.v.y = 80
+print(vec2i::to_str(o.inner.v))
+
+// A `{}` literal gets its own structural type wherever it appears.
+f = () {
+	local box = { a = 1  p = vec2i(5, 6) }
+	print(int::to_str(box.a))
+	box.p.x = 50
+	print(vec2i::to_str(box.p))
+}
+f()

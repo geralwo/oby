@@ -1,0 +1,9 @@
+// Assigning to an undeclared name inside a function declares a local, but
+// warns; the explicit form is `local n = ...`.
+
+f = () -> int {
+	n = 41
+	return n
+}
+
+print("${f()}\n")

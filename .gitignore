@@ -1,3 +1,7 @@
 build/
 plans/
 *.oby
+
+!src/prelude/*.oby
+!tests/**/*.oby
+!games/**/*.oby

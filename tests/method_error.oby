@@ -1,0 +1,17 @@
+// Method-call diagnostics.
+
+// No member of that name.
+v = vec2i(1, 2)
+v.bogus()
+
+// A method exists but no overload takes a String receiver argument.
+c = vec2i(3, 4)
+c.to_str(5)
+
+// A method exists but the argument type does not match.
+Scaler = type {
+	::new = () -> Scaler { return {} }
+	::scale = (Scaler, int x) -> int { return x * 2 }
+}
+s = Scaler()
+s.scale("nope")

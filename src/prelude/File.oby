@@ -1,0 +1,110 @@
+// File handles. `fd` is -1 when the file is not open, so a failed open is a
+// closed File rather than an error.
+//
+// Reads share one buffered reader per handle in the io native, so `read`,
+// `read_line`, and `read_char` can be mixed and `seek`/`tell` stay honest.
+//
+// Temporaries are `local`: a plain `name = value` would reuse a binding from an
+// enclosing scope, so a prelude helper could otherwise hijack a user's global.
+
+File = type {
+	fd = -1
+	::new = () -> File { return {} }
+}
+
+File::open_read = (String path) -> File {
+	return { fd = io::open(path, io::Open::READ) }
+}
+
+File::open_write = (String path) -> File {
+	return { fd = io::open(path, io::Open::WRITE | io::Open::CREATE | io::Open::TRUNCATE) }
+}
+
+File::open_append = (String path) -> File {
+	return { fd = io::open(path, io::Open::WRITE | io::Open::CREATE | io::Open::APPEND) }
+}
+
+File::open_read_write = (String path) -> File {
+	return { fd = io::open(path, io::Open::READ_WRITE) }
+}
+
+File::is_open = (File f) -> int {
+	if f.fd < 0 { return 0 }
+	return 1
+}
+
+File::close = (File f) {
+	if f.fd >= 0 {
+		io::close(f.fd)
+		f.fd = -1
+	}
+}
+
+// Up to `count` bytes as a String. Reads until `count` or the end of the file;
+// `""` at the end of the file, `null` on a closed handle or an I/O error.
+File::read = (File f, int count) -> String {
+	if count <= 0 { return "" }
+	return io::read_string(f.fd, count)
+}
+
+// The same read, but as raw bytes; `null` at the end of the file or on error.
+File::read_bytes = (File f, int count) -> byte[] {
+	if count <= 0 { return null }
+	return io::read_bytes(f.fd, count)
+}
+
+// One line without its newline; `null` at the end of the file (`""` is an
+// empty line).
+File::read_line = (File f) -> String {
+	return io::read_line(f.fd)
+}
+
+// One byte, or `-1` at the end of the file.
+File::read_char = (File f) -> int {
+	return io::read_char(f.fd)
+}
+
+File::read_all = (File f) -> String {
+	return io::read_all(f.fd)
+}
+
+File::write = (File f, String s) -> int {
+	return io::write(f.fd, s.buffer, s.length)
+}
+
+File::write_line = (File f, String s) -> int {
+	return f.write("${s}\n")
+}
+
+File::write_bytes = (File f, byte[] buf, int count) -> int {
+	return io::write(f.fd, buf, count)
+}
+
+File::seek = (File f, int64 offset, io::Seek whence) -> int64 {
+	return io::seek(f.fd, offset, whence)
+}
+
+File::tell = (File f) -> int64 {
+	return io::tell(f.fd)
+}
+
+File::size = (File f) -> int64 {
+	return io::size(f.fd)
+}
+
+// The whole file, or null when it cannot be opened.
+read_file = (String path) -> String {
+	local f = File::open_read(path)
+	if f.is_open() == 0 { return null }
+	local contents = f.read_all()
+	f.close()
+	return contents
+}
+
+write_file = (String path, String s) -> int {
+	local f = File::open_write(path)
+	if f.is_open() == 0 { return -1 }
+	local n = f.write(s)
+	f.close()
+	return n
+}

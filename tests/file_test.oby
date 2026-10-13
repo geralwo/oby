@@ -1,0 +1,88 @@
+// File handles: write, read back, appending, seeking, and the failure cases.
+
+check = (int cond) {
+	print(int::to_str(1 / cond))
+}
+
+path = "build/file_test_tmp.txt"
+w = write_file(path, "one\ntwo\n")
+check(w == 8)
+
+contents = read_file(path)
+check(contents != null)
+check(contents.length == 8)
+check(contents.slice(0, 3) == "one")
+
+// A file that cannot be opened is null, not an error.
+gone = read_file("build/definitely_missing.txt")
+check(gone == null)
+
+// A handle reads in pieces and reports end of file as an empty string.
+f = File::open_read(path)
+check(f.is_open() == 1)
+check(f.read(4) == "one\n")
+check(f.read(100) == "two\n")
+check(f.read(100) == "")
+f.close()
+check(f.fd == -1)
+check(f.is_open() == 0)
+
+// Reads larger than one 4 KiB buffer come back whole.
+big = [byte(0); 5000]
+i = 0
+while i < 5000 {
+	big[i] = byte(65 + i % 26)
+	i += 1
+}
+text = String::from_bytes(big, 0, 5000)
+write_file("build/file_test_big.txt", text)
+r = File::open_read("build/file_test_big.txt")
+check(r.is_open() == 1)
+whole = r.read(5000)
+check(whole.length == 5000)
+check(whole == text)
+r.close()
+
+// write truncates; append preserves.
+app = "build/file_test_append.txt"
+write_file(app, "one\n")
+a = File::open_append(app)
+check(a.is_open() == 1)
+check(a.write("two\n") == 4)
+a.close()
+check(read_file(app) == "one\ntwo\n")
+write_file(app, "x")
+check(read_file(app) == "x")
+
+// Lines, characters, and plain reads share one buffered handle, so `tell`
+// accounts for what has been read ahead.
+m = File::open_read(path)
+check(m.read_line() == "one")
+check(m.tell() == 4)
+check(m.read_char() == 't')
+check(m.tell() == 5)
+check(m.read(3) == "wo\n")
+check(m.read_line() == null)
+check(m.read_char() == -1)
+check(m.seek(0, io::Seek::SET) == 0)
+check(m.tell() == 0)
+check(m.read_line() == "one")
+check(m.seek(-3, io::Seek::END) == 5)
+check(m.read(2) == "wo")
+check(m.read_line() == "")
+m.close()
+
+// A closed handle errors instead of reading.
+check(f.read(4) == null)
+check(f.read_line() == null)
+
+// size() on a handle, and reads as bytes.
+z = File::open_read(path)
+check(z.size() == 8)
+b = z.read_bytes(3)
+check(b.length == 3)
+check(b[0] == 'o')
+check(b[2] == 'e')
+z.close()
+
+print("ok\n")

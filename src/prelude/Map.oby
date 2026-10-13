@@ -1,0 +1,85 @@
+// A small map: parallel key and value arrays, searched linearly. `Map<K, V>` is
+// generic, so keys stay packed when `K` is (no boxing) and `K` needs only `==`.
+//
+// The linear scan is the whole design: a hash table needs a hash function per
+// key type, which the language cannot require yet (generic bounds are not in
+// the language), and a symbol table is small. Iteration is by index —
+// `key_at(i)`, `value_at(i)`, `length()`.
+
+Map = type<K, V> {
+	K[] keys = []
+	V[] values = []
+
+	::new = () -> Map {
+		return {}
+	}
+
+	// The index of `k`, or -1.
+	index_of = (K k) -> int {
+		for (local i = 0; i < keys.length; i += 1) {
+			if keys[i] == k {
+				return i
+			}
+		}
+		return -1
+	}
+
+	has = (K k) -> int {
+		if index_of(k) >= 0 {
+			return 1
+		}
+		return 0
+	}
+
+	// Insert `k`, or overwrite the value already stored for it.
+	set = (K k, V v) {
+		local i = index_of(k)
+		if i >= 0 {
+			values[i] = v
+			return
+		}
+		keys.push(k)
+		values.push(v)
+	}
+
+	// The value for `k`, or `fallback` when the key is absent (`V` may be a
+	// packed type, so there is no null to return).
+	get = (K k, V fallback) -> V {
+		local i = index_of(k)
+		if i >= 0 {
+			return values[i]
+		}
+		return fallback
+	}
+
+	remove = (K k) -> int {
+		local i = index_of(k)
+		if i < 0 {
+			return 0
+		}
+		keys.remove(i)
+		values.remove(i)
+		return 1
+	}
+
+	length = () -> int {
+		return keys.length
+	}
+
+	key_at = (int i) -> K {
+		return keys[i]
+	}
+
+	value_at = (int i) -> V {
+		return values[i]
+	}
+
+	clear = () {
+		while keys.length > 0 {
+			keys.pop()
+		}
+		while values.length > 0 {
+			values.pop()
+		}
+	}
+}

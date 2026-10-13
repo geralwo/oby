@@ -1,0 +1,49 @@
+// Globals are explicit: `$name` reads or writes the global, from anywhere.
+// A bare name inside a function is always a local, a parameter, or a function.
+
+check = (int cond) {
+	print(int::to_str(1 / cond))
+}
+
+// A function writes a global with `$`.
+score = 0
+bump = () {
+	$score += 1
+}
+bump()
+bump()
+check($score == 2)
+check(score == 2)              // the same global, read at top level
+
+// A bare name inside a function is a local even when a global exists.
+// (This is deliberately the implicit form, so it warns.)
+shadow = () -> int {
+	score = 99
+	return score
+}
+check(shadow() == 99)
+check(score == 2)
+
+// Local functions shadow a global of the same name; `$` reaches the global.
+// (Also deliberately implicit: this warns.)
+inc = (int n) -> int { return n + 1 }
+call_local = () -> int {
+	inc = (int n) -> int { return n + 100 }
+	return inc(1)
+}
+check(call_local() == 101)
+check(inc(1) == 2)
+check($inc(1) == 2)            // `$` names the global function
+
+// `$name = value` declares the global when it does not exist yet.
+setup = () {
+	$made = 7
+}
+setup()
+check($made == 7)
+
+// Reading a global from a function.
+read_it = () -> int {
+	return $made
+}
+check(read_it() == 7)

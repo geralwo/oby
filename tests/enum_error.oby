@@ -1,0 +1,12 @@
+// Enum items are constants: they cannot be assigned to.
+
+Kind = enum {
+	A
+	B
+}
+
+// Plain assignment.
+Kind::A = Kind::B
+
+// Compound assignment.
+Kind::A += 1

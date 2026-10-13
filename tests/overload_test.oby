@@ -1,0 +1,9 @@
+// Top-level functions may be overloaded by parameter type: each definition gets
+// its own symbol, and a call picks the one whose parameters match.
+
+pick = (int n) -> String { return "int" }
+pick = (String s) -> String { return "string" }
+pick = (int n, int m) -> String { return "two ints" }
+
+arg = "x"
+print("${pick(1)} | ${pick(arg)} | ${pick(2, 3)}\n")

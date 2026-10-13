@@ -1,0 +1,5 @@
+// A single uppercase letter is reserved for generic parameters, so it cannot be
+// a type name.
+A = type {
+	x = 1
+}

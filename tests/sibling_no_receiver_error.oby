@@ -1,0 +1,15 @@
+// A `{}` literal's structural type has no name, so its function members cannot
+// take a receiver and cannot reach siblings by bare name (use a named type if
+// its functions need the instance, or pass the object in).
+
+box = {
+	value = 1
+	get = () -> int { return value }
+}
+
+empty = {
+	run = () {
+		help()
+	}
+	help = () { }
+}

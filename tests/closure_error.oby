@@ -1,0 +1,20 @@
+// Assigning to a captured variable is an error: closures capture by value.
+
+outer = () -> int {
+	local n = 1
+	local f = () -> int {
+		n += 1
+		return n
+	}
+	return f()
+}
+
+// A plain assignment through a captured reference value is fine, though.
+box = () -> int {
+	local state = { n = 0 }
+	local bump = () -> int {
+		state.n += 1
+		return state.n
+	}
+	return bump()
+}

@@ -1,0 +1,18 @@
+// A member of a **type** needs `::`; a dot is for values.
+
+// Dot on an enum type.
+Color = enum {
+	RED
+	GREEN
+}
+c = Color.RED
+
+// Dot on a type in a call: `Point.new()` instead of `Point::new()`.
+Point = type {
+	x = 0
+	::new = () -> Point { return {} }
+}
+p = Point.new()
+
+// A nested type member reached with a dot.
+d = Terminal::Color.DEFAULT

@@ -1,0 +1,78 @@
+// The file layer: descriptors, buffered readers, and the filesystem.
+//
+// `io` is a type used as a namespace, like `Terminal` and `Input`. It is the
+// one lowercase namespace, kept because `io::write` reads well.
+
+io = type {}
+
+io::stdin = 0
+io::stdout = 1
+io::stderr = 2
+
+// Open flags. The low two bits are the access mode and match open(2) on Linux;
+// the rest combine with `|`:
+//
+//   io::open(path, io::Open::WRITE | io::Open::CREATE | io::Open::TRUNCATE)
+io::Open = enum {
+	READ = 0
+	WRITE = 1
+	READ_WRITE = 2
+	CREATE = 4
+	TRUNCATE = 8
+	APPEND = 16
+	EXCLUSIVE = 32
+}
+
+// `whence` for `io::seek`; values match lseek(2).
+io::Seek = enum {
+	SET = 0
+	CUR = 1
+	END = 2
+}
+
+io::open  = extern io_open(String path, io::Open flags) -> int
+io::close = extern io_close(int fd) -> int
+
+// `read` is read(2): it may return fewer bytes than asked (a short read is
+// normal on pipes). `read_full` fills the buffer and stops early only at the
+// end of the file; `read_string`/`read_bytes` are the same read into a fresh
+// value, which is what `File::read` uses (a `[T; n]` literal needs a constant
+// count, so a runtime-sized read cannot build its buffer in OBY).
+io::read        = extern read(int fd, byte[] buf, int count) -> int
+io::read_full   = extern io_read_full(int fd, byte[] buf, int count) -> int
+io::read_string = extern io_read_string(int fd, int count) -> String
+io::read_bytes  = extern io_read_bytes(int fd, int count) -> byte[]
+io::write       = extern write(int fd, byte[] buf, int count) -> int
+
+// Readers. `read_line` gives the line without its newline, `null` at the end
+// of the file (an empty line is `""`); `read_char` gives one byte or `-1` at
+// the end of the file. They share one read buffer per handle with `read`.
+io::read_line = extern io_read_line(int fd) -> String
+io::read_char = extern io_read_char(int fd) -> int
+io::read_all  = extern io_read_all(int fd) -> String
+
+// Seeking. Both account for bytes the readers have buffered, so a mixed
+// handle still reports and seeks to the logical position.
+io::seek = extern io_seek(int fd, int64 offset, io::Seek whence) -> int64
+io::tell = extern io_tell(int fd) -> int64
+
+// Filesystem queries and changes. `io::size` is the size of a path or an open
+// descriptor, whichever argument it is given.
+io::size    = extern io_size(String path) -> int64
+io::size    = extern io_fd_size(int fd) -> int64
+io::exists  = extern io_exists(String path) -> int
+io::is_dir  = extern io_is_dir(String path) -> int
+io::is_tty  = extern io_is_tty(int fd) -> int
+io::remove  = extern io_remove(String path) -> int       // unlink
+io::rename  = extern io_rename(String from, String to) -> int
+io::mkdir   = extern io_mkdir(String path) -> int        // one directory, 0755
+io::rmdir   = extern io_rmdir(String path) -> int        // must be empty
+io::read_dir = extern io_read_dir(String path) -> String[]
+
+// Process context. `io::getenv` gives null for an unset variable (an empty
+// value is ""); `io::last_error` is the errno of the most recent io call that
+// reported failure (-1 or null) — 0 before any failure, and not cleared by
+// later successes, like C's errno.
+io::cwd        = extern io_cwd() -> String
+io::getenv     = extern io_getenv(String name) -> String
+io::last_error = extern io_last_error() -> int

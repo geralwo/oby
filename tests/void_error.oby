@@ -1,0 +1,23 @@
+// `void` is not a value: an expression that returns nothing cannot be bound,
+// assigned, interpolated, tested, returned, or used as a constructor result.
+
+f = () {}
+
+a = f()
+b = 0
+b = f()
+print("${f()}\n")
+if f() { print("x\n") }
+while f() { break }
+c = f() + 1
+g = () -> int { return f() }
+
+// A constructor that returns nothing cannot produce a value either.
+Empty = type {
+	::new = () {}
+}
+e = Empty()
+
+mk = () {
+	local v = f()
+}

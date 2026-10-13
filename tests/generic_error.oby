@@ -1,0 +1,8 @@
+// Generic diagnostics: argument count, a type that is not generic, and a
+// template written without arguments.
+
+Box = type<T> { n = 0 }
+
+Box<int, Box> a = {}
+int<int> b = {}
+Box c = {}

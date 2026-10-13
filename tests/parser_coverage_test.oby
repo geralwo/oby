@@ -1,0 +1,48 @@
+f = (int a, int b) -> int {
+	return a
+}
+
+extern int_to_str(int n) -> String
+
+t = type {
+	::make = () -> t { return {} }
+	x = 1
+	y = 2
+}
+
+// A static member in a dynamic `{}` literal.
+d = { ::new = 0 }
+
+arr = [1, 2, 3]
+
+// A repeat literal.
+zeros = [0; 4]
+
+g = () {
+	if 1 == 1 {
+		return
+	} else if 2 < 3 {
+		return
+	} else {
+		return
+	}
+	while 1 > 0 {
+		return
+	}
+}
+
+// A receiver parameter: the bare type name `int` is bound as the receiver, so
+// `return int` returns it.
+h = (int) -> int {
+	return int
+}
+
+r = 1 + 2 == 3 and not 4 or 5
+
+// `while 1` with no `break` never falls through, so no trailing return is
+// needed (and none is reported).
+spin = () -> int {
+	while 1 {
+		return 1
+	}
+}

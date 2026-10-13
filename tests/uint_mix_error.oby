@@ -1,0 +1,6 @@
+// Signedness never mixes implicitly: each of these must be an error.
+u = uint(1)
+i = 2
+x = i + u
+int y = u
+if i < u { print("no") }

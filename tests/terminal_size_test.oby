@@ -1,0 +1,12 @@
+// Terminal size: real sizes on a tty, 0 when piped (as in the test harness).
+
+check = (int cond) {
+	print(int::to_str(1 / cond))
+}
+
+w = Terminal::get_width()
+h = Terminal::get_height()
+check(w >= 0)
+check(h >= 0)
+check((w == 0) == (h == 0))
+print("ok\n")

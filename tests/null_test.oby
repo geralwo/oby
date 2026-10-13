@@ -1,0 +1,47 @@
+// The `null` literal: a value of any tagged type, and of nothing else.
+
+check = (int cond) {
+	print(int::to_str(1 / cond))
+}
+
+// Declared tagged bindings accept null.
+String s = null
+check(s == null)
+int[] a = null
+check(a == null)
+object o = null
+check(o == null)
+
+// A function-typed binding can be cleared, then set again.
+(int) -> int f = null
+check(f == null)
+f = (int x) -> int { return x + 1 }
+check(f(1) == 2)
+
+// Assignment keeps the declared type: `s` is still a String.
+s = "hi"
+check(s != null)
+check(s.length == 2)
+
+// Null is falsey.
+truthy = 0
+String maybe = null
+if maybe { truthy = 1 }
+check(truthy == 0)
+
+// Null reaches a native as null and prints as "null".
+print("<${o}>\n")
+object::free(o)
+
+// A declared member may be null; construction also leaves it null.
+Thing = type {
+	String s = null
+	::new = () -> Thing { return {} }
+}
+t = Thing()
+check(t.s == null)
+t.s = "x"
+check(t.s != null)
+
+// `null == null` holds, and so does the identity comparison.
+check(null == null)

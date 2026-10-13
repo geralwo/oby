@@ -1,0 +1,15 @@
+// rand(n) stays in 0..n-1, and Time::sleep_ms returns.
+i = 0
+while i < 100 {
+	r = rand(10)
+	if r < 0 {
+		print("rand below range\n")
+	}
+	if r > 9 {
+		print("rand above range\n")
+	}
+	i += 1
+}
+
+Time::sleep_ms(1)
+print("ok\n")

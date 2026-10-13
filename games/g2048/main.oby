@@ -1,0 +1,49 @@
+// 2048.
+//
+//   ./compile.sh run games/g2048/main.oby
+//
+// Arrows or WASD slide, `r` restarts, `q` quits.
+
+use "g2048.oby"
+use "render.oby"
+
+Terminal::raw_mode(1)
+Terminal::hide_cursor()
+Terminal::clear()
+
+game = Game()
+game.init()
+game.draw()
+
+while game.quit == 0 {
+	Input::poll()
+
+	if Input::is_key_pressed(Input::Key::Q) { game.quit = 1 }
+	if Input::is_key_pressed(Input::Key::R) {
+		game.init()
+		game.draw()
+	}
+
+	dir = -1
+	if Input::is_key_pressed(Input::Key::UP) { dir = Direction::UP }
+	if Input::is_key_pressed(Input::Key::LEFT) { dir = Direction::LEFT }
+	if Input::is_key_pressed(Input::Key::DOWN) { dir = Direction::DOWN }
+	if Input::is_key_pressed(Input::Key::RIGHT) { dir = Direction::RIGHT }
+	if Input::is_key_pressed(Input::Key::W) { dir = Direction::UP }
+	if Input::is_key_pressed(Input::Key::A) { dir = Direction::LEFT }
+	if Input::is_key_pressed(Input::Key::S) { dir = Direction::DOWN }
+	if Input::is_key_pressed(Input::Key::D) { dir = Direction::RIGHT }
+
+	if game.over == 0 and dir >= 0 {
+		if game.slide(dir) == 1 {
+			game.spawn()
+			if game.can_move() == 0 { game.over = 1 }
+			game.draw()
+		}
+	}
+
+	Time::sleep_ms(40)
+}
+
+Terminal::clear()
+Terminal::restore()

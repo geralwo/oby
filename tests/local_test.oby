@@ -1,0 +1,60 @@
+// `local` declares in the current block scope. `1 / cond` is a runtime error
+// when `cond` is false, so the harness fails the test on a wrong result.
+
+check = (int cond) {
+	print(int::to_str(1 / cond))
+}
+
+x = 1
+f = () {
+	// A global is written explicitly with `$`.
+	$x = 2
+}
+f()
+check(x == 2)
+
+shadow = () -> int {
+	// A plain assignment inside a function is always a local, even when a
+	// global of the same name exists (deliberately implicit: this warns).
+	x = 99
+	return x
+}
+check(shadow() == 99)
+check(x == 2)
+
+g = () {
+	// `local` shadows it; the global is untouched.
+	local x = 5
+	check(x == 5)
+}
+g()
+check(x == 2)
+
+// `local Type name = value` uses the declared type.
+h = () -> int {
+	local int y = 41
+	return y + 1
+}
+check(h() == 42)
+
+// A local ends with its block; an inner local shadows the outer one.
+i = () -> int {
+	local int z = 1
+	if z == 1 {
+		local z = 2
+		check(z == 2)
+	}
+	return z
+}
+check(i() == 1)
+
+// A local object shadows a global one (the motivating case: a local `o`
+// captured by a global `o`).
+o = { a = 1 }
+k = () -> int {
+	local o = { a = 7 }
+	check(o.a == 7)
+	return o.a
+}
+check(k() == 7)
+check(o.a == 1)

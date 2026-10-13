@@ -1,0 +1,38 @@
+// `Map<K, V>` and `Pair<A, B>` from the prelude: a linear scan over parallel
+// key and value arrays, so keys stay packed and only `==` is needed.
+
+m = Map<String, int>()
+m.set("a", 1)
+m.set("b", 2)
+m.set("a", 9)
+ka = "a"
+kb = "b"
+zz = "zz"
+print("${m.length()} ${m.get(ka, 0)} ${m.get(zz, -1)} ${m.has(kb)}\n")
+print("${m.remove(ka)} ${m.length()} ${m.key_at(0)} ${m.value_at(0)}\n")
+
+// Iteration is by index.
+m.set("c", 3)
+total = 0
+for (local i = 0; i < m.length(); i += 1) {
+	print("${m.key_at(i)}=${m.value_at(i)}\n")
+	total += m.value_at(i)
+}
+print("${total}\n")
+
+// A generic argument, and a packed key type: no boxing either way.
+lists = Map<String, int[]>()
+lists.set("xs", [1, 2])
+key = "xs"
+int[] empty = []
+print("${lists.get(key, empty)[1]}\n")
+
+counts = Map<int, int>()
+counts.set(7, 70)
+print("${counts.get(7, 0)} ${counts.has(8)}\n")
+
+m.clear()
+print("${m.length()}\n")
+
+p = Pair<String, int>::of("age", 42)
+print("${p.first()} ${p.second()}\n")

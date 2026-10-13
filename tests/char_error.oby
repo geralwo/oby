@@ -1,0 +1,8 @@
+// Character-literal diagnostics.
+
+// Exactly one character.
+bad = 'ab'
+
+// Unterminated.
+other = 'x
+print("done\n")

@@ -1,0 +1,5 @@
+// A runtime repeat count cannot be negative.
+
+n = -1
+xs = [0; n]
+print(int::to_str(xs.length))

@@ -1,0 +1,53 @@
+pair = packed int[2] {
+	x = pair[0]
+	y = pair[1]
+}
+
+pair::new = (int x, int y) -> pair {
+	return [x, y]
+}
+
+add = (pair a, pair b) -> pair {
+	return [a.x + b.x, a.y + b.y]
+}
+
+v = pair(3, 4)
+print(int::to_str(v.x))
+print(int::to_str(v.y))
+print(int::to_str(v[0]))
+print(int::to_str(v[1]))
+
+v.x = 10
+v[1] = 20
+print(int::to_str(v.x))
+print(int::to_str(v.y))
+
+w = add(v, pair(1, 2))
+print(int::to_str(w.x))
+print(int::to_str(w.y))
+
+g = pair(7, 8)
+g.x = 70
+print(int::to_str(g.x))
+print(int::to_str(g.y))
+
+// `T()` with no matching `::new` is the intrinsic zero value.
+zero = pair()
+print(int::to_str(zero.x))
+print(int::to_str(zero.y))
+
+// A 0-argument `::new` overrides the zero value.
+triple = packed int[3] {
+	x = triple[0]
+	y = triple[1]
+	z = triple[2]
+}
+
+triple::new = () -> triple {
+	return [1, 2, 3]
+}
+
+one = triple()
+print(int::to_str(one.x))
+print(int::to_str(one.y))
+print(int::to_str(one.z))

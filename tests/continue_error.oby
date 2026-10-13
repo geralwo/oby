@@ -1,0 +1,8 @@
+// `continue` is only valid inside a loop.
+
+continue
+
+// ... and cannot cross a function boundary.
+f = () {
+	continue
+}

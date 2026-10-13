@@ -1,0 +1,61 @@
+// Integer literals take their context's type when the value fits.
+// Self-check: `1 / cond` fails the run when a condition is false.
+
+check = (int cond) {
+	print(int::to_str(1 / cond))
+}
+
+byte b = 65
+check(b == 'A')
+
+uint u = 2
+check(u + 1 == uint(3))
+check(u == 2)
+
+int64 x = 3000000000
+check(x == 3000000000)
+
+huge = 18446744073709551615
+check(huge > uint64(0))
+check(uint64::to_str(huge) == "18446744073709551615")
+
+f = (uint n) -> uint { return n + 1 }
+check(f(41) == uint(42))
+
+short = byte(5)
+check(short * 2 == 10)
+check(-short == -5)
+
+neg = -3000000000
+check(neg == -3000000000)
+
+// Hex and binary spellings work everywhere a literal does.
+check(0xFF == 255)
+check(0b1010 == 10)
+byte big = 0xF0
+check(big == 0xF0)
+uint mask = 0xFFFFFFFF
+check(mask == uint(4294967295))
+xs = [7; 0x4]
+check(xs.length == 4)
+Codes = enum {
+	A = 0x10
+	B
+}
+check(Codes::B == 17)
+v = vec2i(1, 2)
+check(v[0b1] == 2)
+switch 0b11 {
+case 0b11 {
+	check(1 == 1)
+}
+default {
+	check(0 == 1)
+}
+}
+loop_forever = () -> int {
+	while 0x1 {
+		return 7
+	}
+}
+check(loop_forever() == 7)

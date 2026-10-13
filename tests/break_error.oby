@@ -1,0 +1,8 @@
+break
+
+while 1 {
+	f = () {
+		break
+	}
+	break
+}

@@ -1,0 +1,32 @@
+nums = [1, 2, 3]
+print(int::to_str(nums[0]))
+print(int::to_str(nums[1]))
+print(int::to_str(nums[2]))
+print(int::to_str(nums.length))
+
+i = 1
+print(int::to_str(nums[i]))
+nums[i] = 20
+print(int::to_str(nums[1]))
+
+names = ["a", "bb", "ccc"]
+print(names[2])
+print(int::to_str(names.length))
+
+vs = [vec2i(1, 2), vec2i(3, 4)]
+print(vec2i::to_str(vs[1]))
+vs[1].y = 40
+print(vec2i::to_str(vs[1]))
+
+s = "hi"
+print(int::to_str(int(s.buffer[0])))
+print(int::to_str(int(s.buffer.length)))
+
+bytes = [byte(104), byte(105)]
+print(int::to_str(int(bytes[1])))
+
+object::free(nums)
+object::free(names)
+object::free(vs)
+object::free(bytes)
+object::free(s)

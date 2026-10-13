@@ -1,0 +1,7 @@
+// A range bound must be a constant integer.
+lo = 1
+switch 3 {
+case lo..5 {
+	print("x\n")
+}
+}

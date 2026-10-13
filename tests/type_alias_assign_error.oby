@@ -1,0 +1,3 @@
+// The aliased name is a type: it cannot later be used as a value.
+Fn = (int, int) -> int
+Fn = 5

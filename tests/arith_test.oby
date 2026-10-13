@@ -1,0 +1,19 @@
+print(int::to_str(2 * 3))
+print(int::to_str(10 / 3))
+print(int::to_str(2 + 3 * 4))
+print(int::to_str((2 + 3) * 4))
+
+x = 10
+x += 5
+print(int::to_str(x))
+x -= 3
+print(int::to_str(x))
+x *= 2
+print(int::to_str(x))
+x /= 4
+print(int::to_str(x))
+
+f = 1.5
+f *= 2.0
+f /= 3.0
+print("${f}")

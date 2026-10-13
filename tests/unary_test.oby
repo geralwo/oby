@@ -1,0 +1,24 @@
+// Unary operators: `-` negates, `~` complements, `not` is `!`.
+// (Unary `+` is not part of the language — see unary_plus_error.oby.)
+
+check = (int cond) {
+	print(int::to_str(1 / cond))
+}
+
+x = 7
+check(-x == -7)
+check(- -5 == 5)
+
+f = 1.5
+check(-f == -1.5)
+
+check(~0 == -1)
+z = not 5
+check(z == 0)
+check(not 0 == 1)
+
+b = byte(3)
+check(-b == -3)                  // `byte` widens to `int`
+u = uint(5)
+check(~u == uint(4294967290))    // `~` keeps the operand's type
+print("ok\n")

@@ -1,0 +1,30 @@
+// Buffered stdout: ordering with raw `io::write`, an explicit flush, and more
+// output than the buffer holds.
+
+check = (int cond) {
+	print(int::to_str(1 / cond))
+}
+
+// A raw write flushes what `print` buffered first, so the order holds.
+print("a")
+b = "b\n"
+io::write(io::stdout, b.buffer, b.length)
+print("c\n")
+
+// Output larger than the buffer still arrives whole.
+buf = [byte(0); 9000]
+i = 0
+while i < 9000 {
+	buf[i] = 'y'
+	i += 1
+}
+long = String::from_bytes(buf, 0, 9000)
+print(long)
+print("\n")
+check(long.length == 9000)
+
+// An explicit flush is always safe, mid-line included.
+print("d")
+Terminal::flush()
+print("e\n")
+print("ok\n")

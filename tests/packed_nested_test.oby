@@ -1,0 +1,23 @@
+pair = packed int[2] {
+	x = pair[0]
+	y = pair[1]
+}
+
+mat2 = packed pair[2] {
+	col0 = mat2[0]
+	col1 = mat2[1]
+}
+
+mat2::new = (pair a, pair b) -> mat2 {
+	return [a, b]
+}
+
+m = mat2([1, 2], [3, 4])
+print(int::to_str(m.col0.x))
+print(int::to_str(m.col0.y))
+print(int::to_str(m.col1.x))
+print(int::to_str(m.col1.y))
+print(int::to_str(m[1][0]))
+
+m.col1.y = 9
+print(int::to_str(m.col1.y))

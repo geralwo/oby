@@ -1,0 +1,42 @@
+// A function member of a nominal type is a method: it gets the receiver as an
+// implicit first parameter, named after the type, so a bare sibling name is
+// `self.name` — no receiver parameter and no `::` needed.
+
+check = (int cond) {
+	print(int::to_str(1 / cond))
+}
+
+Counter = type {
+	n = 0
+	bump = () { n += 1 }                    // `n` is `self.n`
+	value = () -> int { return n }
+	next = () -> int {
+		bump()                              // `self.bump()`
+		return Counter.n                    // the receiver is `Counter` in here
+	}
+	::new = () -> Counter { return {} }
+}
+
+c = Counter()
+c.bump()
+c.bump()
+check(c.value() == 2)
+check(c.next() == 3)
+
+d = Counter()
+check(d.value() == 0)                       // state is per instance
+d.bump()
+check(c.value() == 3)
+check(d.value() == 1)
+
+// The same method written out, with the receiver as a parameter.
+Counter::reset = (Counter c) { c.n = 0 }
+c.reset()
+check(c.value() == 0)
+
+Counter::add = (Counter c, int by) {
+	c.n += by
+}
+c.add(5)
+check(c.value() == 5)
+print("ok\n")

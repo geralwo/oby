@@ -1,0 +1,35 @@
+// Declared members: `Type name = value` inside a table body. The declared type
+// is the authority; the value is a type witness (construction still zeroes).
+
+check = (int cond) {
+	print(int::to_str(1 / cond))
+}
+
+Thing = type {
+	String s = "x"
+	int n = 0
+	int[] xs = [0; 2]
+	::new = () -> Thing { return {} }
+}
+
+// Construction zeroes, so a tagged member starts null and a packed one 0.
+t = Thing()
+check(t.n == 0)
+
+// Declared members are writable, and reads go through the declared type.
+t.s = "hi"
+check(t.s.length == 2)
+t.n = 7
+check(t.n == 7)
+
+// A bare `{}` literal gets a structural type with the declared members.
+box = {
+	int a = 1
+	String b = "q"
+}
+check(box.a == 1)
+check(box.b.length == 1)
+
+// A coerced literal may declare the member too.
+Thing t2 = { String s = "zz" }
+check(t2.s.length == 2)

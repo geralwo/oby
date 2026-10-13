@@ -1,0 +1,7 @@
+// Shared declarations for `type_alias_use_test.oby`. Not a test itself: it sits
+// in a subdirectory so the harness's `tests/*.oby` glob skips it. A function
+// type alias declared here must resolve in the importing file, generically too
+// (`plans/done/function_type_aliases.md`, Risks).
+
+SomeFn = (int, int) -> int
+Comparator<T> = (T, T) -> int

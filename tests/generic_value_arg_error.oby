@@ -1,0 +1,7 @@
+// A type argument must name a type, and a template needs its arguments.
+
+Holder = type<T> { n = 0 }
+
+x = 5
+Holder<x> y = {}
+Holder<Holder> z = {}

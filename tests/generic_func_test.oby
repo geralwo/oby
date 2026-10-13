@@ -1,0 +1,68 @@
+// Generic free functions (`plans/done/generics.md` Phase 7): one instantiation per
+// argument list, inferred from the call or named explicitly.
+
+identity = <T>(T x) -> T {
+	return x
+}
+
+max_of = <T>(T a, T b) -> T {
+	if a < b {
+		return b
+	}
+	return a
+}
+
+// The parameter type is an instance, so `T` comes from its arguments.
+count_of = <T>(List<T> xs) -> int {
+	return xs.length()
+}
+
+// The parameter is an array of `T`.
+sum_of = <T>(T[] xs) -> T {
+	local total = xs[0]
+	for (local i = 1; i < xs.length; i += 1) {
+		total += xs[i]
+	}
+	return total
+}
+
+// A generic function may call itself: the instantiation is in place first.
+pow_of = <T>(T base, int e) -> T {
+	if e <= 0 {
+		return 1
+	}
+	return base * pow_of(base, e - 1)
+}
+
+// A function-typed parameter binds `T` from its own signature.
+apply = <T>(T x, (T) -> T f) -> T {
+	return f(x)
+}
+
+double_it = (int n) -> int { return n * 2 }
+
+// `T` appears only in the body, so it has to be named at the call.
+pick = <T>(int n) -> int {
+	return n
+}
+
+print("${identity(42)}\n")
+hi = "hi"
+print("${identity(hi)}\n")
+
+print("${max_of(3, 7)}\n")
+sa = "a"
+sb = "b"
+print("${max_of(sa, sb)}\n")
+
+l = List<int>()
+l.push(5)
+l.push(6)
+print("${count_of(l)}\n")
+
+print("${sum_of([1, 2, 3])}\n")
+print("${sum_of([1.5, 2.5])}\n")
+
+print("${pow_of(2, 10)}\n")
+print("${apply(21, double_it)}\n")
+print("${pick<int>(9)}\n")

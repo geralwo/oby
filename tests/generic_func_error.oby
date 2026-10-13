@@ -1,0 +1,30 @@
+// Generic function diagnostics.
+
+// `T` appears only in the body, so it cannot be inferred.
+pick = <T>(int n) -> int {
+	return n
+}
+x = pick(9)
+
+identity = <T>(T v) -> T {
+	return v
+}
+
+// The wrong number of named type arguments.
+y = identity<int, int>(1)
+
+// A generic function is a template, not a value.
+z = identity
+
+// A body is checked per instantiation: `+` holds for `int`, not `String`.
+add_all = <T>(T a, T b) -> T {
+	return a + b
+}
+n = add_all(1, 2)
+sa = "a"
+sb = "b"
+s = add_all(sa, sb)
+
+// A generic and a concrete function cannot share a name.
+f = (int v) -> int { return v }
+f = <T>(T v) -> T { return v }

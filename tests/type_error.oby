@@ -1,0 +1,10 @@
+int x = "hello"
+y = unknown_thing
+int::new(1, 2)
+int bad = 1
+bad = "str"
+
+// Value-level signedness mixing must be explicit (`uint u = 1` is fine now).
+uint u = uint(1)
+i = 2
+int mixed = u + i

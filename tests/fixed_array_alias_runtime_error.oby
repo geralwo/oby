@@ -1,0 +1,6 @@
+// A fixed array stays fixed through a `T[]` alias, so growing it fails even
+// though the alias's static type is growable.
+
+int[3] c = [1, 2, 3]
+int[] a = c
+a.push(4)

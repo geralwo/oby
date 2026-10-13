@@ -1,0 +1,23 @@
+// Table-member diagnostics.
+
+// A member needs an initializer: `Type name = value`, never `Type name`.
+Alpha = type {
+	String s
+}
+
+// The declared type is checked against the value.
+Beta = type {
+	int n = "not an int"
+}
+
+// `local` has no meaning in a table member.
+f = () -> int {
+	local b = { local x = 1 }
+	return 0
+}
+
+// A member default cannot read a sibling member.
+Gamma = type {
+	a = 1
+	b = a + 1
+}

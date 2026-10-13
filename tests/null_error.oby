@@ -1,0 +1,23 @@
+// `null` diagnostics.
+
+// Packed values are never null.
+int n = null
+
+// A binding cannot take its type from null.
+x = null
+
+f = () -> int {
+	local y = null
+	return 0
+}
+
+// Nor can a member.
+Holder = type {
+	s = null
+}
+
+// Nor an array's element type.
+arr = [null, null]
+
+// Ordering against null is meaningless.
+cmp = null < 5

@@ -1,0 +1,11 @@
+// Function-type diagnostics.
+
+// Wrong arity: a 1-parameter function passed where a 2-parameter one is wanted.
+apply2 = ((int, int) -> int f, int a) -> int { return f(a, a) }
+one = (int x) -> int { return x }
+apply2(one, 1)
+
+// A mismatched return type for a function-returning function.
+bad = (int n) -> (int) -> int {
+	return 5
+}

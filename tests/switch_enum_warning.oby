@@ -1,0 +1,12 @@
+// A switch over an enum that misses an item and has no `default` warns.
+
+Color = enum {
+	RED
+	GREEN
+}
+
+switch Color::RED {
+case Color::RED {
+	print("red\n")
+}
+}

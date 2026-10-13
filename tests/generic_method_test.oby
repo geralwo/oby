@@ -1,0 +1,71 @@
+// A method with its own type parameters (`plans/done/generics.md` Phase 7 follow-up):
+// `U` is inferred from the call, while the enclosing type's `T` is already
+// bound. `Box<U>` names a new instantiation of the enclosing type.
+
+Box = type<T> {
+	T[] items = []
+
+	::new = () -> Box { return {} }
+
+	push = (T x) {
+		items.push(x)
+	}
+
+	count_of = <U>(U x) -> int {
+		return items.length
+	}
+
+	map_to = <U>((T) -> U f) -> Box<U> {
+		local out = Box<U>::new()
+		for (local i = 0; i < items.length; i += 1) {
+			out.push(f(items[i]))
+		}
+		return out
+	}
+
+	first = () -> T {
+		return items[0]
+	}
+}
+
+b = Box<int>()
+b.push(1)
+b.push(2)
+
+sx = "x"
+print("${b.count_of(sx)}\n")
+
+d = b.map_to((int x) -> int { return x * 10 })
+print("${d.first()}\n")
+
+// A second instantiation of the same method, with a different `U`.
+words = b.map_to((int x) -> String { return int::to_str(x) })
+print(words.first())
+print("\n")
+
+// The type arguments may also be named instead of inferred.
+named = b.map_to<int>((int x) -> int { return x + 1 })
+print("${named.first()}\n")
+
+// A concrete member wins over a generic one of the same name; the generic one
+// is the fallback.
+Mixed = type {
+	int[] items = []
+
+	::new = () -> Mixed { return {} }
+
+	add = (int x) {
+		items.push(x)
+	}
+
+	add = <U>(U x, int n) -> int {
+		for (local i = 0; i < n; i += 1) {
+			items.push(n)
+		}
+		return items.length
+	}
+}
+
+m = Mixed()
+m.add(5)
+print("${m.add(9, 2)}\n")

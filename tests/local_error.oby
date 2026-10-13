@@ -1,0 +1,3 @@
+// `local` is only valid inside a function; at file scope it is an error.
+
+local x = 1

@@ -1,0 +1,9 @@
+// A switch body takes one `default`.
+switch 1 {
+default {
+	print("a\n")
+}
+default {
+	print("b\n")
+}
+}

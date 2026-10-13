@@ -1,0 +1,67 @@
+// Filesystem operations: exists/is_dir/size, remove/rename, mkdir/rmdir,
+// read_dir — plus process context: cwd, getenv, last_error. Everything happens
+// under build/, cleaned up first so reruns work.
+
+check = (int cond) {
+	print(int::to_str(1 / cond))
+}
+
+// `last_error` starts at 0: nothing has failed yet.
+check(io::last_error() == 0)
+
+// The working directory: the harness runs from the repo root.
+here = io::cwd()
+check(here != null)
+check(here.length > 0)
+check(io::exists("src/prelude/core.oby") == 1)   // resolved against the cwd
+
+// Environment: `PATH` is set everywhere; an unset variable is null.
+check(io::getenv("PATH").length > 0)
+check(io::getenv("OBY_TEST_NO_SUCH_VARIABLE") == null)
+
+dir = "build/io_fs_test_dir"
+a = "build/io_fs_test_dir/a.txt"
+b = "build/io_fs_test_dir/b.txt"
+io::remove(a)
+io::remove(b)
+io::rmdir(dir)
+
+check(io::exists(dir) == 0)
+check(io::is_dir(dir) == 0)
+check(io::mkdir(dir) == 0)
+check(io::exists(dir) == 1)
+check(io::is_dir(dir) == 1)
+
+write_file(a, "hello")
+check(io::exists(a) == 1)
+check(io::is_dir(a) == 0)
+check(io::size(a) == 5)
+
+check(io::rename(a, b) == 0)
+check(io::exists(a) == 0)
+check(io::exists(b) == 1)
+
+names = io::read_dir(dir)
+check(names != null)
+check(names.length == 1)
+check(names[0] == "b.txt")
+
+check(io::remove(b) == 0)
+check(io::exists(b) == 0)
+check(io::rmdir(dir) == 0)
+check(io::exists(dir) == 0)
+
+// Missing paths report failure, not garbage or a crash.
+check(io::size("build/definitely_missing.txt") == -1)
+check(io::read_dir("build/definitely_missing_dir") == null)
+
+// A failing call records errno; a later success does not clear it.
+fd = io::open("build/definitely_missing_open.txt", io::Open::READ)
+check(fd == -1)
+check(io::last_error() == 2)          // ENOENT
+ok_fd = io::open("src/prelude/core.oby", io::Open::READ)
+check(ok_fd >= 0)
+check(io::close(ok_fd) == 0)
+check(io::last_error() == 2)
+
+print("ok\n")

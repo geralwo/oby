@@ -1,0 +1,60 @@
+// A `{}` literal takes the expected nominal object type. Self-check: `1 / cond`
+// is a runtime error (nonzero exit) when the condition is false.
+
+check = (int cond) {
+	print(int::to_str(1 / cond))
+}
+
+test = type {
+	x = 0
+	y = 0
+	::new = () -> test {
+		return {}
+	}
+	::make = (int v) -> test {
+		return { x = v }
+	}
+}
+
+// `::new`'s `return {}` builds the all-zero default.
+t = test::new()
+check(t.x == 0)
+check(t.y == 0)
+
+// A `{}` literal binds to the nominal type.
+test a = { x = 3 y = 4 }
+check(a.x == 3)
+check(a.y == 4)
+
+// Omitted members stay zeroed (the object is calloc'd).
+test b = { x = 5 }
+check(b.x == 5)
+check(b.y == 0)
+
+// Assigning to an existing nominal binding coerces too.
+a = { x = 8 }
+check(a.x == 8)
+check(a.y == 0)
+
+// A function returning a nominal type coerces its `{}`.
+m = test::make(11)
+check(m.x == 11)
+check(m.y == 0)
+
+// A `{}` argument to a nominal parameter coerces.
+identity = (test v) -> test {
+	return v
+}
+c = identity({ x = 9 })
+check(c.x == 9)
+check(c.y == 0)
+
+// Nested nominal members coerce recursively.
+outer = type {
+	inner = test::new()
+	n = 0
+}
+outer o = { inner = { x = 7 } n = 2 }
+check(o.inner.x == 7)
+check(o.inner.y == 0)
+check(o.n == 2)

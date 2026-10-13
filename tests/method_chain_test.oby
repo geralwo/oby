@@ -1,0 +1,45 @@
+// A method call on an expression evaluates its receiver once, and an
+// overloaded method call resolves to the matching overload (both fixed while
+// generics landed).
+
+Counter = type {
+	n = 3
+
+	mk = () -> Counter { return Counter::new() }
+	val = () -> int { return n }
+
+	::new = () -> Counter { return {} }
+}
+
+calls = 0
+
+made = () -> Counter {
+	$calls += 1
+	return Counter::new()
+}
+
+print("${made().val()}\n")
+print("${calls}\n")
+
+Bag = type {
+	int[] items = []
+
+	add = (Bag b, int x) {
+		b.items.push(x)
+	}
+
+	add = (Bag b, int x, int y) {
+		b.items.push(x)
+		b.items.push(y)
+	}
+
+	count = () -> int { return items.length }
+
+	::new = () -> Bag { return {} }
+}
+
+o = Bag()
+o.add(1)
+print("${o.count()}\n")
+o.add(2, 3)
+print("${o.count()}\n")

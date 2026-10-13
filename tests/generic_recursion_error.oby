@@ -1,0 +1,7 @@
+// Runaway instantiation (arguments that grow) stops with a diagnostic.
+
+Rec = type<T> {
+	Rec<T[]> next = null
+}
+
+Rec<int> r = {}

@@ -1,0 +1,25 @@
+// A `{}` literal built as a nominal type must name only real members, with
+// assignable values.
+
+test = type {
+	x = 0
+	y = 0
+}
+
+// Unknown member.
+test a = { z = 1 }
+
+// Wrong member type.
+test b = { x = "str" }
+
+// Unknown member in a nested literal.
+point = type {
+	v = 0
+	::new = () -> point {
+		return {}
+	}
+}
+holder = type {
+	p = point::new()
+}
+holder h = { p = { v = 0  w = 1 } }

@@ -1,0 +1,9 @@
+// Two overloads with identical parameter types are ambiguous.
+
+double_it = (int x) -> int {
+	return x
+}
+double_it = (int x) -> int {
+	return x * 2
+}
+double_it(3)

@@ -1,0 +1,26 @@
+// A function stored in an object member is callable through the member.
+
+check = (int cond) {
+	print(int::to_str(1 / cond))
+}
+
+box = {
+	op = (int x) -> int { return x * 2 }
+}
+check(box.op(21) == 42)
+
+// Reading the member into a variable still works.
+f = box.op
+check(f(21) == 42)
+
+// A member function as an argument.
+apply = (fn, int x) -> int { return fn(x) }
+check(apply(box.op, 5) == 10)
+
+// A member function of a nested object.
+nested = {
+	inner = {
+		op = (int x) -> int { return x + 100 }
+	}
+}
+check(nested.inner.op(1) == 101)

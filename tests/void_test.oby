@@ -1,0 +1,21 @@
+// `void` is fine where no value is used: a statement call, an empty return, and
+// `return f()` from a `-> void` function.
+
+check = (int cond) {
+	print(int::to_str(1 / cond))
+}
+
+f = () {}
+
+g = () -> void {
+	f()
+	return
+}
+
+h = () -> void { return f() }
+
+f()
+g()
+h()
+check(1 == 1)
+print("ok\n")

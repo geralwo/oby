@@ -1,0 +1,13 @@
+// A compound assignment typed the other way around. `=*`, `=/`, `=%`, `=&`,
+// `=|`, `=^`, `=<<`, `=>>` are not operators — `*=`, `/=`, ... are, and none
+// of these can start an expression.
+
+x = 1
+x =* 2
+x =/ 2
+x =% 2
+x =& 3
+x =| 3
+x =^ 3
+x =<< 1
+x =>> 1

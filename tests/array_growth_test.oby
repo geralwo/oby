@@ -1,0 +1,37 @@
+// Array growth: `push` / `pop` / `insert` / `remove`. Self-check: `1 / cond`
+// is a runtime error (nonzero exit) when a condition is false.
+
+check = (int cond) {
+	print(int::to_str(1 / cond))
+}
+
+nums = [1, 2, 3]
+nums.push(4)
+check(nums.length == 4)
+check(nums[3] == 4)
+
+last = nums.pop()
+check(last == 4)
+check(nums.length == 3)
+
+nums.insert(0, 9)
+check(nums[0] == 9)
+check(nums.length == 4)
+
+first = nums.remove(0)
+check(first == 9)
+check(nums[0] == 1)
+check(nums.length == 3)
+
+// Tagged elements (String).
+names = ["a", "b"]
+names.push("c")
+check(names.length == 3)
+check(names[2] == "c")
+
+// Packed elements (vec2i).
+vs = [vec2i(1, 2)]
+vs.push(vec2i(3, 4))
+check(vs.length == 2)
+v = vs.pop()
+check(v.y == 4)

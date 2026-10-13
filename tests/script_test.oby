@@ -1,0 +1,16 @@
+test = {
+	test = "test"
+	test2 = int(2)
+	test3 = {
+		member = 0
+	}
+	test4 = (int n) -> int {
+		return n
+	}
+}
+
+
+print(int::to_str(test.test3.member))
+test.member = 1
+test.test3.member = test.member
+print(int::to_str(test.test3.member))

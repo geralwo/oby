@@ -1,0 +1,60 @@
+// Unsigned integers: explicit creation, real unsigned semantics (a value
+// above 2^31 compares and divides as unsigned), literals that adapt, and
+// `int` lengths. Self-check: `1 / cond` fails the run when a condition is false.
+
+check = (int cond) {
+	print(int::to_str(1 / cond))
+}
+
+u = uint(2)
+u = u + 1
+check(u == 3)
+u = u - 1
+check(u == 2)
+check(u - 3 == uint(0) - uint(1))      // unsigned wrap
+
+// Above 2^31: genuinely unsigned.
+big = uint(3000000000)
+check(big > uint(0))
+check(big / uint(2) == uint(1500000000))
+check(uint::to_str(big) == "3000000000")
+check("${big}" == "3000000000")
+
+// uint64 wraps and formats as unsigned (0 - 1 == 2^64 - 1).
+w = uint64(0) - uint64(1)
+check(w > uint64(0))
+check(uint64::to_str(w) == "18446744073709551615")
+check(w == uint64(18446744073709551615))
+
+// int64 formats signed; one formatter serves `int` and `int64`.
+check(int64::to_str(-9223372036854775807) == "-9223372036854775807")
+
+// Explicit conversions both ways, bit-preserving.
+check(int(big) == -1294967296)
+check(uint(int(big)) == big)
+check(int64(uint64(5)) == int64(5))
+
+// Literals: int, else int64, else uint64; typed targets are fit-checked.
+x = 3000000000
+check(x == 3000000000)
+int64 y = 3000000000
+check(y == 3000000000)
+byte b = 65
+check(b == 'A')
+n = 'z' + 1
+check(n == 123)
+
+// Lengths are `int` now.
+a = [10, 20, 30]
+check(a.length - 1 == 2)
+s = "hello"
+check(s.length - 1 == 4)
+
+// Enum items over uint, with the first item establishing the type.
+Flags = enum {
+	A = uint(1)
+	B = 2
+	C = 4
+}
+check(uint(Flags::C) == 4)
+check(Flags::A != Flags::B)

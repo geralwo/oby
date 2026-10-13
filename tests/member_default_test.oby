@@ -1,0 +1,44 @@
+// A member's declared initializer is its default: a `{}` literal that omits the
+// member gets that value, and a tagged default allocates a fresh value per
+// instance.
+
+check = (int cond) {
+	print(int::to_str(1 / cond))
+}
+
+Box = type {
+	fd = -1
+	n = 5
+	xs = [0; 3]
+	::new = () -> Box { return {} }
+}
+
+b = Box()
+check(b.fd == -1)
+check(b.n == 5)
+check(b.xs != null)
+check(b.xs.length == 3)
+
+// Each instance gets its own array, not a shared one.
+c = Box()
+c.xs[0] = 9
+check(b.xs[0] == 0)
+
+// A literal that writes a member keeps its own value; the rest default.
+Box d = { n = 7 }
+check(d.n == 7)
+check(d.fd == -1)
+check(d.xs.length == 3)
+
+// Function members are populated too.
+Callable = type {
+	op = (int x) -> int { return x * 2 }
+	::new = () -> Callable { return {} }
+}
+g = Callable()
+check(g.op(21) == 42)
+
+// The prelude's File used to be left with fd == 0 (stdin) by `{}`.
+f = File()
+check(f.fd == -1)
+check(f.is_open() == 0)

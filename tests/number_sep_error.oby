@@ -1,0 +1,8 @@
+// A digit separator must sit between two digits: these are lex errors.
+
+a = 1_
+b = 1__000
+c = 0xFF_
+d = 1_.5
+e = 1e5_
+f = 0x_FF

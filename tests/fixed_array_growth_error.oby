@@ -1,0 +1,7 @@
+// A fixed-size array (`T[n]`) cannot be resized.
+
+int[3] c = [1, 2, 3]
+c.push(4)
+c.pop()
+c.insert(0, 5)
+c.remove(0)

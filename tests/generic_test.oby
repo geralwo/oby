@@ -1,0 +1,37 @@
+// Generic types: one instantiation per argument list, checked and compiled
+// concretely (`plans/done/generics.md`).
+
+Box = type<T> {
+	T[] items = []
+
+	push = (T x) {
+		items.push(x)
+	}
+
+	pop = () -> T {
+		return items.pop()
+	}
+
+	count = () -> int {
+		return items.length
+	}
+
+	::new = () -> Box { return {} }
+}
+
+b = Box<int>()
+b.push(1)
+b.push(2)
+print("${b.count()}\n")
+print("${b.pop()}\n")
+print("${b.pop()}\n")
+
+// A second instantiation is a separate type with its own storage.
+s = Box<String>()
+s.push("hi")
+s.push("there")
+print(s.pop())
+
+Box<String> d = {}
+d.push("literal")
+print(d.pop())

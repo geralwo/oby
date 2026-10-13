@@ -1,0 +1,14 @@
+// Array-literal coercion diagnostics.
+
+// The count must match a fixed length.
+int[3] c = [1, 2]
+
+// Elements must be assignable to the expected element type.
+int[] a = ["x"]
+
+// A repeat count must match too.
+int[5] r = [0; 3]
+
+// A fixed-size array needs a constant repeat count.
+n = 3
+int[3] rn = [0; n]

@@ -1,0 +1,25 @@
+vec2i = packed int[2] {
+	x = vec2i[0]
+	y = vec2i[1]
+}
+
+vec2i a = [1, 2, 3]
+vec2i b = [1.5, 2]
+vec2i c = [1, 2]
+i = 1
+print(int::to_str(c[2]))
+print(int::to_str(c[i]))
+
+o = {
+	p = 0
+}
+o.p = c
+
+extern write(vec2i v) -> int
+
+vec2i::new = (int x, int y) -> vec2i {
+	return [x, y]
+}
+
+vec2i d = vec2i(1)
+d()

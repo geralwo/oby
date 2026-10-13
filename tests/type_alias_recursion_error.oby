@@ -1,0 +1,4 @@
+// A generic alias that names itself is rejected at declaration. (An indirect
+// cycle is caught later, by the instantiation depth cap.)
+Loopy<T> = (Loopy<T>, T) -> int
+take = (Loopy<int> f) -> void { }

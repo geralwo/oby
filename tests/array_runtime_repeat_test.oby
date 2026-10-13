@@ -1,0 +1,61 @@
+// `[expr; n]` with a runtime n: a growable heap array holding n copies.
+
+check = (int cond) {
+	print(int::to_str(1 / cond))
+}
+
+n = 4
+xs = [7; n]
+check(xs.length == 4)
+check(xs[0] == 7)
+check(xs[3] == 7)
+xs.push(9)                     // growable, unlike a fixed `T[n]`
+check(xs.length == 5)
+
+// The element expression is evaluated once, like the constant form.
+calls = 0
+next = () -> int {
+	$calls += 1
+	return $calls
+}
+ys = [next(); n]
+check(calls == 1)
+check(ys[1] == 1)
+
+// A count can be computed.
+w = 3
+h = 2
+grid = [0; w * h]
+check(grid.length == 6)
+
+// Zero gives an empty, still growable array.
+z = 0
+empty = [5; z]
+check(empty.length == 0)
+empty.push(1)
+check(empty.length == 1)
+
+// Any element type works.
+names = ["x"; n]
+check(names.length == 4)
+check(names[2] == "x")
+
+vs = [vec2i(1, 2); 2]
+check(vs[1].y == 2)
+
+// The original motivation: a runtime-sized buffer, then read into it.
+path = "build/array_runtime_repeat.txt"
+write_file(path, "abcd")
+f = File::open_read(path)
+buf = [byte(0); n]
+check(io::read(f.fd, buf, n) == 4)
+f.close()
+check(String::from_bytes(buf, 0, 4) == "abcd")
+
+object::free(xs)
+object::free(ys)
+object::free(grid)
+object::free(empty)
+object::free(names)
+object::free(vs)
+print("ok\n")

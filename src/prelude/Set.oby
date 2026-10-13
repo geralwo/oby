@@ -1,0 +1,86 @@
+// A set of distinct values: a `Set<T>` over a `T[]`, searched linearly like
+// `Map` (`docs/oby.md` §4.7). Membership needs only `==` on `T`, so a packed
+// element type stays packed; a hash set waits for generic bounds.
+
+Set = type<T> {
+	T[] items = []
+
+	::new = () -> Set {
+		return {}
+	}
+
+	// A set holding the distinct elements of `xs`.
+	::with = (T[] xs) -> Set {
+		local s = Set::new()
+		for (local i = 0; i < xs.length; i += 1) {
+			s.add(xs[i])
+		}
+		return s
+	}
+
+	length = () -> int {
+		return items.length
+	}
+
+	is_empty = () -> int {
+		if items.length == 0 {
+			return 1
+		}
+		return 0
+	}
+
+	// The index of `x`, or -1.
+	index_of = (T x) -> int {
+		for (local i = 0; i < items.length; i += 1) {
+			if items[i] == x {
+				return i
+			}
+		}
+		return -1
+	}
+
+	has = (T x) -> int {
+		if index_of(x) >= 0 {
+			return 1
+		}
+		return 0
+	}
+
+	// 1 when it was added, 0 when it was already there.
+	add = (T x) -> int {
+		if index_of(x) >= 0 {
+			return 0
+		}
+		items.push(x)
+		return 1
+	}
+
+	// 1 when it was removed, 0 when it was not there.
+	remove = (T x) -> int {
+		local i = index_of(x)
+		if i < 0 {
+			return 0
+		}
+		items.remove(i)
+		return 1
+	}
+
+	// The elements, in insertion order.
+	at = (int i) -> T {
+		return items[i]
+	}
+
+	clear = () {
+		while items.length > 0 {
+			items.pop()
+		}
+	}
+
+	clone = () -> Set {
+		local s = Set::new()
+		for (local i = 0; i < items.length; i += 1) {
+			s.items.push(items[i])
+		}
+		return s
+	}
+}

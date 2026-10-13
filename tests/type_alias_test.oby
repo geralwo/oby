@@ -1,0 +1,59 @@
+// Function-type aliases: `Name = <function type>` names the type once, so a
+// parameter reads as the uniform `Type name` (`plans/done/function_type_aliases.md`).
+
+Fn = (int, int) -> int
+add = (int a, int b) -> int { return a + b }
+
+// As a parameter type.
+apply = (Fn fn, int x) -> int { return fn(x, x) }
+print("${apply(add, 4)}\n")
+
+// As a return type.
+pick = () -> Fn { return add }
+print("${pick()(3, 5)}\n")
+
+// As an explicit binding.
+Fn g = add
+print("${g(2, 3)}\n")
+
+// A zero-parameter alias.
+Thunk = () -> int
+make = () -> Thunk { return () -> int { return 42 } }
+print("${make()()}\n")
+
+// An alias nested inside another function type.
+combine = (Fn a, Fn b, int x) -> int { return a(x, b(x, x)) }
+print("${combine(add, add, 3)}\n")
+
+// Declared after it is used: types are collected before bodies are checked.
+use_late = (Late f) -> int { return f(10) }
+Late = (int) -> int
+inc = (int x) -> int { return x + 1 }
+print("${use_late(inc)}\n")
+
+// A generic alias: instantiated per argument list.
+Comparator<T> = (T, T) -> int
+less = (int a, int b) -> int { return a - b }
+
+take = (Comparator<int> cmp, int[] xs) -> int { return cmp(xs[0], xs[1]) }
+xs = [9, 4]
+print("${take(less, xs)}\n")
+
+// Inside a generic type's body, `Comparator<T>` uses the instance's argument.
+Wrap = type<T> {
+	run = (Comparator<T> fn, T a, T b) -> int { return fn(a, b) }
+	::new = () -> Wrap { return {} }
+}
+w = Wrap<int>()
+print("${w.run(less, 9, 4)}\n")
+
+v = Wrap<String>()
+cmp_len = (String x, String y) -> int { return x.length - y.length }
+sx = "abc"
+sy = "de"
+print("${v.run(cmp_len, sx, sy)}\n")
+
+// An explicit binding whose type is an instantiation.
+zero = (float x, float y) -> int { return 0 }
+Comparator<float> cf = zero
+print("${cf(1.0, 2.0)}\n")

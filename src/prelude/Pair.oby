@@ -1,0 +1,27 @@
+// A two-element tuple. The parts live in one-element arrays because a member of
+// a parameter type has to have a default that exists for every argument, and
+// only arrays do (`docs/oby.md` §4.7).
+
+Pair = type<A, B> {
+	A[] as = []
+	B[] bs = []
+
+	::new = () -> Pair {
+		return {}
+	}
+
+	::of = (A a, B b) -> Pair {
+		local p = Pair()
+		p.as.push(a)
+		p.bs.push(b)
+		return p
+	}
+
+	first = () -> A {
+		return as[0]
+	}
+
+	second = () -> B {
+		return bs[0]
+	}
+}

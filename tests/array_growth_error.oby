@@ -1,0 +1,19 @@
+// Wrong argument counts and element types for array growth methods.
+
+a = [1, 2, 3]
+
+// push takes exactly one (value).
+a.push()
+a.push(1, 2)
+
+// insert takes (index, value).
+a.insert(0)
+
+// remove takes (index).
+a.remove()
+
+// pop takes no arguments.
+a.pop(0)
+
+// The stored value must match the element type.
+a.push("str")

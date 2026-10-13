@@ -1,0 +1,49 @@
+// `continue` jumps to the next iteration. Self-check: `1 / cond` is a runtime
+// error (nonzero exit) when the condition is false.
+
+check = (int cond) {
+	print(int::to_str(1 / cond))
+}
+
+// `continue` skips the rest of the iteration.
+sum = 0
+i = 0
+while i < 10 {
+	i += 1
+	if i % 2 == 1 {
+		continue
+	}
+	sum += i
+}
+check(sum == 30)
+
+// `continue` in a nested loop only affects the inner loop.
+total = 0
+a = 0
+while a < 3 {
+	a += 1
+	b = 0
+	while b < 3 {
+		b += 1
+		if b == 2 {
+			continue
+		}
+		total += 1
+	}
+}
+check(total == 6)
+
+// `continue` in a function body targets the innermost loop inside it.
+count = () -> int {
+	local n = 0
+	local k = 0
+	while k < 5 {
+		k += 1
+		if k == 3 {
+			continue
+		}
+		n += 1
+	}
+	return n
+}
+check(count() == 4)

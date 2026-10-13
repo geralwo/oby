@@ -1,0 +1,9 @@
+// A `use` is only loaded from a file's top level. Nested it is a diagnostic,
+// not a silent no-op. Both the statement form (a function body) and the
+// expression slot (a literal element) are checked.
+
+f = () {
+	use "does_not_exist.oby"
+}
+
+a = [use "does_not_exist.oby"]

@@ -1,0 +1,215 @@
+// Packed vector types: vec2i, vec3i (int components) and vec2, vec3 (float).
+// Each is byte-tight inline storage with named components.
+//
+// The binary operators are defined as `T::op = ...` (a space before `=`);
+// `a += b` then falls back to `a = a + b`, which calls `T::+`.
+
+vec2i = packed int[2] {
+	x = vec2i[0]
+	y = vec2i[1]
+}
+
+vec2i::new = (int x, int y) -> vec2i {
+	return [x, y]
+}
+
+vec2i::+ = (vec2i, vec2i b) -> vec2i {
+	vec2i.x += b.x
+	vec2i.y += b.y
+	return vec2i
+}
+
+vec2i::- = (vec2i, vec2i b) -> vec2i {
+	vec2i.x -= b.x
+	vec2i.y -= b.y
+	return vec2i
+}
+
+vec2i::* = (vec2i, vec2i b) -> vec2i {
+	vec2i.x *= b.x
+	vec2i.y *= b.y
+	return vec2i
+}
+
+vec2i::* = (vec2i, int s) -> vec2i {
+	vec2i.x *= s
+	vec2i.y *= s
+	return vec2i
+}
+
+vec2i::/ = (vec2i, vec2i b) -> vec2i {
+	vec2i.x /= b.x
+	vec2i.y /= b.y
+	return vec2i
+}
+
+vec2i::/ = (vec2i, int s) -> vec2i {
+	vec2i.x /= s
+	vec2i.y /= s
+	return vec2i
+}
+
+vec2i::to_str = (vec2i) -> String {
+	return "(${vec2i.x}, ${vec2i.y})"
+}
+
+vec3i = packed int[3] {
+	x = vec3i[0]
+	y = vec3i[1]
+	z = vec3i[2]
+}
+
+vec3i::new = (int x, int y, int z) -> vec3i {
+	return [x, y, z]
+}
+
+vec3i::+ = (vec3i, vec3i b) -> vec3i {
+	vec3i.x += b.x
+	vec3i.y += b.y
+	vec3i.z += b.z
+	return vec3i
+}
+
+vec3i::- = (vec3i, vec3i b) -> vec3i {
+	vec3i.x -= b.x
+	vec3i.y -= b.y
+	vec3i.z -= b.z
+	return vec3i
+}
+
+vec3i::* = (vec3i, vec3i b) -> vec3i {
+	vec3i.x *= b.x
+	vec3i.y *= b.y
+	vec3i.z *= b.z
+	return vec3i
+}
+
+vec3i::* = (vec3i, int s) -> vec3i {
+	vec3i.x *= s
+	vec3i.y *= s
+	vec3i.z *= s
+	return vec3i
+}
+
+vec3i::/ = (vec3i, vec3i b) -> vec3i {
+	vec3i.x /= b.x
+	vec3i.y /= b.y
+	vec3i.z /= b.z
+	return vec3i
+}
+
+vec3i::/ = (vec3i, int s) -> vec3i {
+	vec3i.x /= s
+	vec3i.y /= s
+	vec3i.z /= s
+	return vec3i
+}
+
+vec3i::to_str = (vec3i) -> String {
+	return "(${vec3i.x}, ${vec3i.y}, ${vec3i.z})"
+}
+
+vec2 = packed float[2] {
+	x = vec2[0]
+	y = vec2[1]
+}
+
+vec2::new = (float x, float y) -> vec2 {
+	return [x, y]
+}
+
+vec2::+ = (vec2, vec2 b) -> vec2 {
+	vec2.x += b.x
+	vec2.y += b.y
+	return vec2
+}
+
+vec2::- = (vec2, vec2 b) -> vec2 {
+	vec2.x -= b.x
+	vec2.y -= b.y
+	return vec2
+}
+
+vec2::* = (vec2, vec2 b) -> vec2 {
+	vec2.x *= b.x
+	vec2.y *= b.y
+	return vec2
+}
+
+vec2::* = (vec2, float s) -> vec2 {
+	vec2.x *= s
+	vec2.y *= s
+	return vec2
+}
+
+vec2::/ = (vec2, vec2 b) -> vec2 {
+	vec2.x /= b.x
+	vec2.y /= b.y
+	return vec2
+}
+
+vec2::/ = (vec2, float s) -> vec2 {
+	vec2.x /= s
+	vec2.y /= s
+	return vec2
+}
+
+vec2::to_str = (vec2) -> String {
+	return "(${vec2.x}, ${vec2.y})"
+}
+
+vec3 = packed float[3] {
+	x = vec3[0]
+	y = vec3[1]
+	z = vec3[2]
+}
+
+vec3::new = (float x, float y, float z) -> vec3 {
+	return [x, y, z]
+}
+
+vec3::+ = (vec3, vec3 b) -> vec3 {
+	vec3.x += b.x
+	vec3.y += b.y
+	vec3.z += b.z
+	return vec3
+}
+
+vec3::- = (vec3, vec3 b) -> vec3 {
+	vec3.x -= b.x
+	vec3.y -= b.y
+	vec3.z -= b.z
+	return vec3
+}
+
+vec3::* = (vec3, vec3 b) -> vec3 {
+	vec3.x *= b.x
+	vec3.y *= b.y
+	vec3.z *= b.z
+	return vec3
+}
+
+vec3::* = (vec3, float s) -> vec3 {
+	vec3.x *= s
+	vec3.y *= s
+	vec3.z *= s
+	return vec3
+}
+
+vec3::/ = (vec3, vec3 b) -> vec3 {
+	vec3.x /= b.x
+	vec3.y /= b.y
+	vec3.z /= b.z
+	return vec3
+}
+
+vec3::/ = (vec3, float s) -> vec3 {
+	vec3.x /= s
+	vec3.y /= s
+	vec3.z /= s
+	return vec3
+}
+
+vec3::to_str = (vec3) -> String {
+	return "(${vec3.x}, ${vec3.y}, ${vec3.z})"
+}

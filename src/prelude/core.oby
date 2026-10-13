@@ -1,0 +1,53 @@
+// Manual memory management: frees a heap value (array, string, object).
+// The value must not be used afterwards.
+object::free = extern ob_free(object o) -> void
+
+byte::new = extern byte_from_int(int n) -> byte
+
+// The signed <-> unsigned constructors are natives: crossing signedness is
+// always explicit, so their bodies cannot be written in OBY (`return n` would
+// be exactly the implicit conversion the language refuses). Everything else
+// only widens: int -> int64, uint -> uint64, uint -> int64.
+int::new = (int n) -> int {
+	return n
+}
+int::new = extern int_from_uint(uint u) -> int
+
+int::to_str = extern int_to_str(int i) -> String
+int64::to_str = extern int64_to_str(int64 i) -> String
+uint::to_str = extern uint_to_str(uint u) -> String
+uint64::to_str = extern uint64_to_str(uint64 u) -> String
+
+uint::new = (uint n) -> uint {
+	return n
+}
+uint::new = extern uint_from_int(int n) -> uint
+uint::new = extern uint_from_int64(int64 n) -> uint
+uint::new = extern uint_from_uint64(uint64 n) -> uint
+
+int64::new = (int64 n) -> int64 {
+	return n
+}
+int64::new = extern int64_from_uint64(uint64 u) -> int64
+
+uint64::new = (uint64 n) -> uint64 {
+	return n
+}
+uint64::new = extern uint64_from_int64(int64 n) -> uint64
+
+use "io.oby"
+use "String.oby"
+use "File.oby"
+use "Terminal.oby"
+use "Time.oby"
+use "Input.oby"
+use "vec.oby"
+use "math.oby"
+use "List.oby"
+use "Map.oby"
+use "Pair.oby"
+use "Set.oby"
+
+// The same buffered write as `Terminal::print`; `Terminal::flush` makes it
+// visible immediately.
+print = extern term_print(String s) -> void

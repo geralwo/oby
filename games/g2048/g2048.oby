@@ -1,0 +1,178 @@
+// 2048 board logic.
+//
+// The caller owns a `Game` instance (the main script creates `game`); the rules
+// are methods on the type: `game.slide(dir)`, `game.spawn()`, `game.can_move()`,
+// `game.init()`. The board is a flat int[] of 16 cells; index = row * 4 + col.
+
+Direction = enum {
+	UP
+	DOWN
+	LEFT
+	RIGHT
+}
+
+Game = type {
+	board = [0; 16]
+	score = 0
+	over = 0
+	quit = 0
+}
+
+Game::new = () -> Game {
+	return {}
+}
+
+// Slide one line toward its front (index 0) and merge each equal adjacent pair
+// once. Mutates `line`; returns the score gained.
+merge_line = (int[] line) -> int {
+	// gather the non-zero cells at the front
+	local buf = [0; 4]
+	local k = 0
+	local i = 0
+	while i < 4 {
+		if line[i] != 0 {
+			buf[k] = line[i]
+			k += 1
+		}
+		i += 1
+	}
+
+	// merge equal neighbours, skipping the consumed one
+	local gain = 0
+	i = 0
+	while i < 3 {
+		if buf[i] != 0 and buf[i] == buf[i + 1] {
+			buf[i] = buf[i] * 2
+			gain += buf[i]
+			buf[i + 1] = 0
+			i += 2
+		} else {
+			i += 1
+		}
+	}
+
+	// gather again to close the gaps the merges opened
+	k = 0
+	i = 0
+	while i < 4 {
+		if buf[i] != 0 {
+			line[k] = buf[i]
+			k += 1
+		}
+		i += 1
+	}
+	while k < 4 {
+		line[k] = 0
+		k += 1
+	}
+	return gain
+}
+
+// Move every row (LEFT/RIGHT) or column (UP/DOWN). Returns 1 if any cell moved.
+Game::slide = (Game g, int dir) -> int {
+	local step = 1
+	if dir == Direction::RIGHT { step = -1 }
+	if dir == Direction::UP { step = 4 }
+	if dir == Direction::DOWN { step = -4 }
+
+	local moved = 0
+	local k = 0
+	while k < 4 {
+		local start = k * 4
+		if dir == Direction::RIGHT { start = k * 4 + 3 }
+		if dir == Direction::UP { start = k }
+		if dir == Direction::DOWN { start = 12 + k }
+
+		local line = [0; 4]
+		local before = [0; 4]
+		local j = 0
+		while j < 4 {
+			line[j] = g.board[start + j * step]
+			before[j] = line[j]
+			j += 1
+		}
+
+		g.score += merge_line(line)
+
+		j = 0
+		while j < 4 {
+			if line[j] != before[j] { moved = 1 }
+			g.board[start + j * step] = line[j]
+			j += 1
+		}
+		k += 1
+	}
+	return moved
+}
+
+// Put a 2 (90%) or a 4 (10%) in a random empty cell. Returns 1 if it placed one.
+Game::spawn = (Game g) -> int {
+	local empties = 0
+	local i = 0
+	while i < 16 {
+		if g.board[i] == 0 { empties += 1 }
+		i += 1
+	}
+	if empties == 0 { return 0 }
+
+	local target = rand(empties)
+	i = 0
+	while i < 16 {
+		if g.board[i] == 0 {
+			if target == 0 {
+				if rand(10) == 0 {
+					g.board[i] = 4
+				} else {
+					g.board[i] = 2
+				}
+				return 1
+			}
+			target -= 1
+		}
+		i += 1
+	}
+	return 0
+}
+
+// 1 if any move is still possible (an empty cell or an equal neighbour).
+Game::can_move = (Game g) -> int {
+	local i = 0
+	while i < 16 {
+		if g.board[i] == 0 { return 1 }
+		i += 1
+	}
+
+	local r = 0
+	while r < 4 {
+		local c = 0
+		while c < 3 {
+			if g.board[r * 4 + c] == g.board[r * 4 + c + 1] { return 1 }
+			c += 1
+		}
+		r += 1
+	}
+
+	local c = 0
+	while c < 4 {
+		r = 0
+		while r < 3 {
+			if g.board[r * 4 + c] == g.board[(r + 1) * 4 + c] { return 1 }
+			r += 1
+		}
+		c += 1
+	}
+	return 0
+}
+
+Game::init = (Game g) {
+	local i = 0
+	while i < 16 {
+		g.board[i] = 0
+		i += 1
+	}
+	g.score = 0
+	g.over = 0
+	g.quit = 0
+	g.spawn()
+	g.spawn()
+}

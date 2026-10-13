@@ -1,0 +1,2 @@
+// A function-type alias cannot redefine an existing type name.
+int = (int, int) -> int

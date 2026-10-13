@@ -1,0 +1,39 @@
+// Digit separators: `_` between digits, in literals and in text parsing.
+
+check = (int cond) {
+	print(int::to_str(1 / cond))
+}
+
+check(1_000_000 == 1000000)
+check(1_0 == 10)
+check(0xFF_FF == 65535)
+check(0xFFFF_FFFF == 4294967295)
+check(0b1010_1010 == 170)
+check(0b1_0 == 2)
+check(9_000_000_000 == 9000000000)              // the int64 rung of the ladder
+check(18_000_000_000_000_000_000 == 18000000000000000000)
+check(1_000.5 == 1000.5)
+check(1_0.0_5 == 10.05)
+check(1e1_0 == 10000000000.0)
+
+// The same text in a type context and an enum item.
+Amounts = enum {
+	X = 1_000
+}
+check(Amounts::X == 1000)
+byte b = byte(1_0)
+check(b == 10)
+
+// String conversion accepts them too.
+check("1_000".to_int() == 1000)
+check("-1_000".to_int() == -1000)
+check(" 0xFF_FF ".to_int() == 65535)
+check("0b1010_1010".to_int() == 170)
+check("1_000.5".to_float() == 1000.5)
+
+// ...but a misplaced separator is not a number.
+check("1_".to_int() == 0)
+check("1__000".to_int() == 0)
+check("_1".to_int() == 0)
+check("1_.5".to_float() == 0.0)
+print("ok\n")

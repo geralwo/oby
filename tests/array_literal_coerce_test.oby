@@ -1,0 +1,31 @@
+// Array literals take the expected array type. Self-check: `1 / cond` is a
+// runtime error (nonzero exit) when a condition is false.
+
+check = (int cond) {
+	print(int::to_str(1 / cond))
+}
+
+// The element type comes from the expected type (a widening here).
+int64[] big = [1, 2, 3]
+check(big.length == 3)
+
+// Nested packed literals coerce to the element type.
+vec2i[] vs = [[1, 2], [3, 4]]
+check(vs.length == 2)
+check(vs[1].y == 4)
+
+// A fixed length is checked and accepted when it matches.
+int[3] fixed = [7, 8, 9]
+check(fixed[2] == 9)
+
+// A call argument coerces to the parameter's array type.
+sum_y = (vec2i[] v) -> int {
+	local n = 0
+	local i = 0
+	while i < v.length {
+		n += v[i].y
+		i += 1
+	}
+	return n
+}
+check(sum_y([[1, 2], [3, 4]]) == 6)

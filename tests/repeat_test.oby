@@ -1,0 +1,19 @@
+// `[expr; n]` builds n copies of expr.
+xs = [0; 5]
+print(int::to_str(xs.length))
+print(int::to_str(xs[4]))
+xs[2] = 7
+print(int::to_str(xs[2]))
+
+vs = [vec2i(); 3]
+print(vec2i::to_str(vs[0]))
+vs[1] = vec2i(1, 2)
+print(vec2i::to_str(vs[1]))
+
+names = ["x"; 2]
+print(names[1])
+print(int::to_str(names.length))
+
+object::free(xs)
+object::free(vs)
+object::free(names)

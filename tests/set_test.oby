@@ -1,0 +1,25 @@
+// `Set<T>` from the prelude: distinct values over a `T[]`, searched linearly
+// like `Map` — membership needs only `==` on `T`.
+
+s = Set<String>()
+sa = "a"
+sb = "b"
+missing = "zz"
+print("${s.add(sa)} ${s.add(sa)} ${s.add(sb)} ${s.length()}\n")
+print("${s.has(sa)} ${s.has(missing)}\n")
+print("${s.remove(sa)} ${s.remove(sa)} ${s.length()}\n")
+
+// A packed element type stays packed (no boxing).
+nums = Set<int>::with([3, 1, 3, 2])
+print("${nums.length()} ${nums.at(0)} ${nums.at(1)} ${nums.at(2)}\n")
+
+empty = Set<int>()
+print("${empty.is_empty()} ${nums.is_empty()}\n")
+
+// A clone is independent.
+copy = nums.clone()
+copy.add(9)
+print("${nums.length()} ${copy.length()}\n")
+
+nums.clear()
+print("${nums.length()}\n")

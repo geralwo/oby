@@ -1,0 +1,66 @@
+// Drawing: the playfield border, cells, and the actors.
+//
+// The playfield is W x H cells; cell (x, y) is drawn at terminal (x + 1, y + 1)
+// so the border has room at row and column 0.
+
+Grid = enum {
+	W = 40
+	H = 20
+	MAXLEN = 800     // W * H, written out: a repeat count must be a constant
+}
+
+draw_border = () {
+	Terminal::clear()
+	local y = 0
+	while y <= Grid::H + 1 {
+		Terminal::move_to(0, y)
+		Terminal::print("#")
+		Terminal::move_to(Grid::W + 1, y)
+		Terminal::print("#")
+		y += 1
+	}
+	local x = 0
+	while x <= Grid::W + 1 {
+		Terminal::move_to(x, 0)
+		Terminal::print("#")
+		Terminal::move_to(x, Grid::H + 1)
+		Terminal::print("#")
+		x += 1
+	}
+}
+
+// Draw a cell at playfield (x, y).
+draw_cell = (int x, int y, String s, Terminal::Color fg) {
+	Terminal::move_to(x + 1, y + 1)
+	Terminal::printc(s, fg, Terminal::Color::DEFAULT)
+}
+
+// Blank a cell.
+erase_cell = (int x, int y) {
+	Terminal::move_to(x + 1, y + 1)
+	Terminal::print(" ")
+}
+
+draw_head = (int x, int y) {
+	draw_cell(x, y, "@", Terminal::Color::LIGHTGREEN)
+}
+
+draw_body = (int x, int y) {
+	draw_cell(x, y, "o", Terminal::Color::GREEN)
+}
+
+draw_food = (int x, int y) {
+	draw_cell(x, y, "*", Terminal::Color::RED)
+}
+
+draw_score = (int score) {
+	Terminal::print_at(0, Grid::H + 2, "score: ${score}")
+}
+
+draw_hint = () {
+	Terminal::print_at(0, Grid::H + 3, "arrows or wasd to move, q to quit")
+}
+
+draw_game_over = (int score) {
+	Terminal::print_at(0, Grid::H + 4, "game over! score: ${score} - press any key")
+}

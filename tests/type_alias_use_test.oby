@@ -1,0 +1,23 @@
+// Aliases declared in a used file resolve in the importer, and a generic one
+// still instantiates per argument list there.
+
+use "lib/type_alias_lib.oby"
+
+less = (int a, int b) -> int { return a - b }
+
+// The non-generic alias from the imported file, as a parameter type.
+take = (SomeFn f, int[] xs) -> int { return f(xs[0], xs[1]) }
+xs = [9, 4]
+print("${take(less, xs)}\n")
+
+// The imported generic alias, instantiated concretely...
+pick = (Comparator<int> cmp) -> int { return cmp(7, 2) }
+print("${pick(less)}\n")
+
+// ...and inside a generic body.
+Wrap = type<T> {
+	run = (Comparator<T> fn, T a, T b) -> int { return fn(a, b) }
+	::new = () -> Wrap { return {} }
+}
+w = Wrap<int>()
+print("${w.run(less, 9, 4)}\n")

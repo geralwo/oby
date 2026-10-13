@@ -1,0 +1,6 @@
+// A range needs an ordered, integral switch value.
+switch "b" {
+case "a".."c" {
+	print("x\n")
+}
+}

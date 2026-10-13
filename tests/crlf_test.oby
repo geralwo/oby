@@ -1,0 +1,20 @@
+// CRLF line endings: `read_line` strips the \r, while the raw bytes keep it.
+
+check = (int cond) {
+	print(int::to_str(1 / cond))
+}
+
+path = "build/crlf_test.txt"
+write_file(path, "one\r\ntwo\r\n")
+
+f = File::open_read(path)
+check(f.read_line() == "one")
+check(f.read_line() == "two")
+check(f.read_line() == null)
+f.close()
+
+// The carriage return is part of the bytes; only the line reader strips it.
+all = read_file(path)
+check(all.length == 10)
+check(all.buffer[3] == '\r')
+print("ok\n")

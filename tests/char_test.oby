@@ -1,0 +1,23 @@
+// Character literals: one byte each.
+
+check = (int cond) {
+	print(int::to_str(1 / cond))
+}
+
+check('A' == byte(65))
+check(int('A') == 65)
+check(int('\n') == 10)
+check(int('\t') == 9)
+check(int('\'') == 39)
+check(int('\\') == 92)
+check(int('\x41') == 65)
+
+// Byte-typed, so it compares directly against a string's bytes.
+s = "hi"
+check(s.buffer[0] == 'h')
+check(s.buffer[1] == 'i')
+
+// As array elements and in expressions.
+byte[] digits = ['0', '1', '2']
+check(digits[2] == '2')
+check(int('9') - int('0') == 9)

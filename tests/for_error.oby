@@ -1,0 +1,18 @@
+// `for` diagnostics.
+
+// A counter declared with `local` is scoped to the loop and cannot be read
+// afterwards.
+for (local i = 0; i < 3; i += 1) {
+}
+print(int::to_str(i))
+
+// A packed value cannot be a loop condition (same rule as `while`).
+v = vec2i(1, 2)
+for (local j = 0; v; j += 1) {
+}
+
+// `local` is exempt only in the header; a `local` in the body at file scope is
+// still outside a function.
+for (local m = 0; m < 1; m += 1) {
+	local n = 1
+}

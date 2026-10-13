@@ -1,0 +1,10 @@
+// A member may be explicitly defaulted to null. Reading through it is a runtime
+// error (`member access on null`), not a silent value.
+
+Thing = type {
+	String s = null
+	::new = () -> Thing { return {} }
+}
+
+t = Thing()
+print(int::to_str(t.s.length))

@@ -1,0 +1,25 @@
+// Time: now_ms is monotonic, sleep_ms returns, and now_us shares its epoch.
+
+check = (int cond) {
+	print(int::to_str(1 / cond))
+}
+
+start = Time::now_ms()
+Time::sleep_ms(5)
+elapsed = Time::now_ms() - start
+check(elapsed >= 0)
+check(Time::now_ms() >= start)
+
+// now_us reads the same clock, so a reading taken between two millisecond
+// readings lands between them.
+ms1 = Time::now_ms()
+us = Time::now_us()
+ms2 = Time::now_ms()
+check(us / 1000 >= ms1)
+check(us / 1000 <= ms2)
+
+// Microsecond resolution: a 5 ms sleep is at least 1000 us.
+start_us = Time::now_us()
+Time::sleep_ms(5)
+check(Time::now_us() - start_us >= 1000)
+print("ok\n")

@@ -1,0 +1,24 @@
+// A function returning a value must return on every path.
+
+// No else: falls off the end when x <= 0.
+f = (int x) -> int {
+	if x > 0 {
+		return 1
+	}
+}
+
+// The else branch does not return.
+g = (int x) -> int {
+	if x > 0 {
+		return 1
+	} else {
+		x = 2
+	}
+}
+
+// A member function body is checked too.
+t = type {
+	x = 0
+	::bad = () -> t {
+	}
+}

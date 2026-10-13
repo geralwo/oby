@@ -1,0 +1,4 @@
+// Math and randomness.
+
+// A pseudo-random value in 0..n-1, seeded from the clock.
+rand = extern ob_rand(int n) -> int

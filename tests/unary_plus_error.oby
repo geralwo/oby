@@ -1,0 +1,7 @@
+// Unary '+' is not part of the language; `=+ 1` is almost always a mistyped
+// `+= 1`, so it is rejected instead of assigning.
+
+x = +1
+y = +x
+pos = vec2i()
+pos.x =+ 1

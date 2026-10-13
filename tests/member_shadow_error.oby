@@ -1,0 +1,20 @@
+// A member that shares a name with an enclosing type or parameter shadows it.
+// Referring to such a name inside a field value is an error, rather than
+// silently binding to the member.
+
+// The parameter `x` and the member `x` collide: `{ x = x }` would bind the
+// value to the member (0), not the parameter.
+Thing = type {
+	x = 0
+	::new = (int x) -> Thing {
+		return { x = x }
+	}
+}
+
+// The member `inner` collides with the type `inner`.
+inner = type {
+	v = 0
+}
+holder = type {
+	inner = inner::new()
+}

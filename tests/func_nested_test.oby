@@ -1,0 +1,39 @@
+// A function literal defined inside a function body. Self-check: `1 / cond` is
+// a runtime error (nonzero exit) when the condition is false.
+
+check = (int cond) {
+	print(int::to_str(1 / cond))
+}
+
+// The nested literal's own return type must be honoured.
+outer = () -> int {
+	local inner = () -> int {
+		return 7
+	}
+	return inner() + 1
+}
+check(outer() == 8)
+
+// Nested two deep.
+deep = () -> int {
+	local a = () -> int {
+		local b = () -> int {
+			return 3
+		}
+		return b() * 2
+	}
+	return a() + 1
+}
+check(deep() == 7)
+
+// A nested literal passed to a higher-order function.
+apply = (f, int x) -> int {
+	return f(x)
+}
+use_it = () -> int {
+	local twice = (int x) -> int {
+		return x * 2
+	}
+	return apply(twice, 21)
+}
+check(use_it() == 42)

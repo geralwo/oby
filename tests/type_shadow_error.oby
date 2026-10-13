@@ -1,0 +1,17 @@
+// A binding may not reuse a type name (it would hide the type). Members are
+// unaffected.
+
+int int = 2
+
+test = type {
+	v = 0
+}
+test test = { v = 1 }
+
+f = () {
+	local int = 1
+}
+
+g = (int int) -> int {
+	return 0
+}

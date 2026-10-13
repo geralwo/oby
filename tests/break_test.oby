@@ -1,0 +1,38 @@
+// `break` leaves the innermost loop.
+i = 0
+while 1 {
+	i += 1
+	if i == 3 {
+		break
+	}
+}
+print(int::to_str(i))
+
+// Nested loops: break only leaves the inner one.
+outer = 0
+inner = 0
+while outer < 3 {
+	outer += 1
+	inner = 0
+	while 1 {
+		inner += 1
+		if inner == 2 {
+			break
+		}
+	}
+}
+print(int::to_str(outer))
+print(int::to_str(inner))
+
+// break inside a function body is fine when the loop is inside it.
+find = (int n) -> int {
+	local i = 0
+	while i < 100 {
+		if i == n {
+			break
+		}
+		i += 1
+	}
+	return i
+}
+print(int::to_str(find(7)))

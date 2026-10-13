@@ -1,0 +1,92 @@
+// Terminal modes, size, colours, and output. The standard descriptors live on
+// `io` (`io::stdout`, `io::stdin`, `io::stderr`).
+Terminal = type {}
+
+// Modes. `raw_mode` delivers keys immediately and without echo (see `Input`);
+// `mouse_mode` turns SGR mouse reporting on. `restore` undoes all modes and
+// also runs at exit, so a crashed frame cannot leave the terminal broken.
+Terminal::raw_mode = extern term_raw_mode(int on) -> void
+Terminal::mouse_mode = extern term_mouse_mode(int on) -> void
+Terminal::restore = extern term_restore() -> void
+
+// Size in cells; 0 when stdout is not a terminal (for example piped to a file).
+Terminal::get_width = extern term_width() -> int
+Terminal::get_height = extern term_height() -> int
+
+// Cursor positioning and colours are natives: a game redraws cells every frame,
+// and building an interpolated string per cell would allocate per cell.
+Terminal::move_to = extern term_move_to(int x, int y) -> void
+Terminal::set_color = extern term_set_color(int fg, int bg) -> void
+
+Terminal::Color = enum {
+	DEFAULT = -1
+	BLACK
+	RED
+	GREEN
+	YELLOW
+	BLUE
+	MAGENTA
+	CYAN
+	WHITE
+	LIGHTBLACK
+	LIGHTRED
+	LIGHTGREEN
+	LIGHTYELLOW
+	LIGHTBLUE
+	LIGHTMAGENTA
+	LIGHTCYAN
+	LIGHTWHITE
+}
+
+// Buffered output: lines and cells accumulate in one buffer, so a redraw costs
+// a copy instead of a syscall per cell. It is flushed when full, on a newline
+// when stdout is a terminal, before reading input, and at exit; `Terminal::flush`
+// makes it visible now. `io::write` is the raw escape hatch and flushes this
+// buffer first, so order is kept when the two are mixed.
+Terminal::print = extern term_print(String s) -> void
+Terminal::flush = extern term_flush() -> void
+
+Terminal::hide_cursor = () {
+	Terminal::print("\e[?25l")
+}
+
+Terminal::show_cursor = () {
+	Terminal::print("\e[?25h")
+}
+
+Terminal::fg_code = (Terminal::Color c) -> int {
+	if c == Terminal::Color::DEFAULT {
+		return 39
+	}
+	if c > 7 {
+		return 90 + c - 8
+	}
+	return 30 + c
+}
+
+Terminal::bg_code = (Terminal::Color c) -> int {
+	if c == Terminal::Color::DEFAULT {
+		return 49
+	}
+	if c > 7 {
+		return 100 + c - 8
+	}
+	return 40 + c
+}
+
+Terminal::printc = (String s, Terminal::Color fg, Terminal::Color bg) {
+	local fgc = Terminal::fg_code(fg)
+	local bgc = Terminal::bg_code(bg)
+	Terminal::set_color(fgc, bgc)
+	Terminal::print(s)
+	Terminal::print("\e[0m")
+}
+
+Terminal::print_at = (int x, int y, String s) {
+	Terminal::move_to(x, y)
+	Terminal::print(s)
+}
+
+Terminal::clear = () {
+	Terminal::print("\e[2J\e[H")
+}

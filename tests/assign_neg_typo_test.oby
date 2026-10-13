@@ -1,0 +1,17 @@
+// `=-` (no space) assigns the negation and warns, because `-=` is likely
+// meant; `= -` (spaced) is the plain spelling.
+
+check = (int cond) {
+	print(int::to_str(1 / cond))
+}
+
+a = -1
+check(a == -1)
+
+b =- 1
+check(b == -1)
+
+x = 4
+c = -x
+check(c == -4)
+print("ok\n")

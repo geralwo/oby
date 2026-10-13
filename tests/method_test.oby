@@ -1,0 +1,48 @@
+// Method call sugar: `obj.method(args)` calls the static member function
+// `T::method` with `obj` as the receiver. Self-check: `1 / cond` is a runtime
+// error (nonzero exit) when the condition is false.
+
+check = (int cond) {
+	print(int::to_str(1 / cond))
+}
+
+// Packed type: `v.to_str()` is `vec2i::to_str(v)`.
+v = vec2i(3, 4)
+print(v.to_str())
+check(v.x == 3)
+check((v + vec2i(1, 1)).y == 5)
+
+// Through an index and through a call result (non-path callees).
+vs = [vec2i(1, 1), vec2i(2, 2)]
+print(vs[1].to_str())
+make = () -> vec2i {
+	return vec2i(5, 6)
+}
+print(make().to_str())
+
+// Nominal object with methods; the receiver mutates its own field.
+Counter = type {
+	value = 0
+	::new = () -> Counter { return {} }
+	::bump = (Counter) -> void { Counter.value += 1 }
+	::get = (Counter) -> int { return Counter.value }
+}
+c = Counter()
+c.bump()
+c.bump()
+c.bump()
+check(c.get() == 3)
+
+// Overloads are chosen with the receiver as the first argument.
+Scaler = type {
+	n = 0
+	::new = () -> Scaler { return {} }
+	::scale = (Scaler, int x) -> int { return x * 2 }
+	::scale = (Scaler, String s) -> String { return "${s}!" }
+}
+s = Scaler()
+check(s.scale(21) == 42)
+print(s.scale("ok"))
+
+// The explicit `::` form still works.
+print(vec2i::to_str(v))

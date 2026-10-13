@@ -1,0 +1,168 @@
+// A growable list. `List<T>` is a generic type (`docs/oby.md` §4.7): one
+// concrete list type per element type, holding a real `T[]`, so an `int` stays
+// packed and nothing is boxed or cast.
+//
+// The methods live in the body because a method written outside it would have
+// to name the type's own arguments (`List<T>::push = ...`), which generic
+// declarations do not support yet.
+//
+// Members are public: `l.items` is the underlying array.
+
+List = type<T> {
+	T[] items = []
+
+	::new = () -> List {
+		return {}
+	}
+
+	// A list holding a copy of `xs`.
+	::with = (T[] xs) -> List {
+		local l = List::new()
+		for (local i = 0; i < xs.length; i += 1) {
+			l.push(xs[i])
+		}
+		return l
+	}
+
+	length = () -> int {
+		return items.length
+	}
+
+	is_empty = () -> int {
+		if items.length == 0 {
+			return 1
+		}
+		return 0
+	}
+
+	push = (T x) {
+		items.push(x)
+	}
+
+	// The last element; popping an empty list is a runtime error, so check
+	// `length` first.
+	pop = () -> T {
+		return items.pop()
+	}
+
+	at = (int i) -> T {
+		return items[i]
+	}
+
+	set = (int i, T x) {
+		items[i] = x
+	}
+
+	insert = (int i, T x) {
+		items.insert(i, x)
+	}
+
+	remove = (int i) -> T {
+		return items.remove(i)
+	}
+
+	// The first index of `x`, or -1. Needs `==` on `T`.
+	index_of = (T x) -> int {
+		for (local i = 0; i < items.length; i += 1) {
+			if items[i] == x {
+				return i
+			}
+		}
+		return -1
+	}
+
+	contains = (T x) -> int {
+		if index_of(x) >= 0 {
+			return 1
+		}
+		return 0
+	}
+
+	clear = () {
+		while items.length > 0 {
+			items.pop()
+		}
+	}
+
+	// A copy, element by element (arrays are references; this one is fresh).
+	clone = () -> List {
+		local l = List::new()
+		for (local i = 0; i < items.length; i += 1) {
+			l.push(items[i])
+		}
+		return l
+	}
+
+	// In place, ascending, using `<` on the element type. There are no bounds to
+	// declare, so instantiating with a type that has no `<` is an error at that
+	// instantiation.
+	sort = () {
+		for (local i = 1; i < items.length; i += 1) {
+			local x = items[i]
+			local j = i - 1
+			while j >= 0 {
+				if items[j] <= x {
+					break
+				}
+				items[j + 1] = items[j]
+				j -= 1
+			}
+			items[j + 1] = x
+		}
+	}
+
+	// In place, with `cmp(a, b)` negative when `a` belongs before `b`. `-> void`
+	// is written out because a parameter is itself a function type.
+	sort_by = ((T, T) -> int cmp) -> void {
+		for (local i = 1; i < items.length; i += 1) {
+			local x = items[i]
+			local j = i - 1
+			while j >= 0 {
+				if cmp(items[j], x) <= 0 {
+					break
+				}
+				items[j + 1] = items[j]
+				j -= 1
+			}
+			items[j + 1] = x
+		}
+	}
+
+	// A sorted copy; `sort` is in place.
+	sorted = () -> List {
+		local c = clone()
+		c.sort()
+		return c
+	}
+
+	// A new list of `f` applied to each element, in order. `U` is the method's
+	// own type parameter, inferred from `f`.
+	map = <U>((T) -> U f) -> List<U> {
+		local out = List<U>::new()
+		for (local i = 0; i < items.length; i += 1) {
+			out.push(f(items[i]))
+		}
+		return out
+	}
+
+	// A new list of the elements `keep` accepts (a non-zero result).
+	filter = ((T) -> int keep) -> List<T> {
+		local out = List<T>::new()
+		for (local i = 0; i < items.length; i += 1) {
+			local x = items[i]
+			if keep(x) != 0 {
+				out.push(x)
+			}
+		}
+		return out
+	}
+
+	// `acc = f(acc, x)` for every element, starting from `init`.
+	fold = <U>(U init, (U, T) -> U f) -> U {
+		local acc = init
+		for (local i = 0; i < items.length; i += 1) {
+			acc = f(acc, items[i])
+		}
+		return acc
+	}
+}

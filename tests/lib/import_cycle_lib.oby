@@ -1,0 +1,4 @@
+// Imported by `tests/import_cycle_test.oby` and imports it back (a cycle).
+use "../import_cycle_test.oby"
+
+print("lib ran\n")

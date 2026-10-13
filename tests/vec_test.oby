@@ -1,0 +1,45 @@
+a = vec2i(1, 2)
+b = vec2i(10, 20)
+a += b
+print(vec2i::to_str(a))
+a -= b
+print(vec2i::to_str(a))
+a *= b
+print(vec2i::to_str(a))
+
+p = vec3i(1, 2, 3)
+p += vec3i(1, 1, 1)
+print(vec3i::to_str(p))
+
+f = vec2(1.5, 2.5)
+f += vec2(0.5, 0.5)
+print(vec2::to_str(f))
+
+g = vec3(1.0, 2.0, 3.0)
+g *= vec3(2.0, 2.0, 2.0)
+print(vec3::to_str(g))
+
+z = vec2i()
+print(vec2i::to_str(z))
+
+w = vec2i(4, 6)
+w /= vec2i(2, 3)
+print(vec2i::to_str(w))
+
+s = vec2i(2, 4)
+s *= 3
+print(vec2i::to_str(s))
+s /= 2
+print(vec2i::to_str(s))
+
+t = vec2(1.0, 2.0)
+t *= 2.5
+print(vec2::to_str(t))
+
+print(vec2i::to_str(a + b))
+print(vec2i::to_str(b - a))
+print(vec2i::to_str(a * 3))
+print(vec2i::to_str(b / a))
+print(int::to_str(a == b))
+print(int::to_str(a != b))
+print(int::to_str(a == vec2i(1, 2)))

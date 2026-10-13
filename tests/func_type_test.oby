@@ -1,0 +1,35 @@
+// Function types: `(T, U) -> R` as a parameter or a return type.
+
+check = (int cond) {
+	print(int::to_str(1 / cond))
+}
+
+// A typed higher-order parameter.
+apply = ((int) -> int f, int x) -> int {
+	return f(x)
+}
+inc = (int x) -> int {
+	return x + 1
+}
+check(apply(inc, 4) == 5)
+
+// A function literal passed directly.
+check(apply((int x) -> int { return x * 3 }, 2) == 6)
+
+// A function returning a function.
+pick = () -> (int) -> int {
+	return inc
+}
+check(pick()(9) == 10)
+
+// A zero-parameter function type.
+thunk = (() -> int t) -> int {
+	return t()
+}
+check(thunk(() -> int { return 3 }) == 3)
+
+// A comparator-style two-parameter function type.
+combine = ((int, int) -> int f, int a, int b) -> int {
+	return f(a, b)
+}
+check(combine((int a, int b) -> int { return a + b }, 3, 4) == 7)

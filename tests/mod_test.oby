@@ -1,0 +1,13 @@
+print(int::to_str(7 % 3))
+print(int::to_str(10 % 5))
+print(int::to_str(2 + 7 % 3))
+print(int::to_str(10 % 4 % 3))
+
+x = 17
+x %= 5
+print(int::to_str(x))
+
+// Ring-buffer style indexing.
+len = 3
+i = 4
+print(int::to_str((i + 1) % len))

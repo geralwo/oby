@@ -1,0 +1,23 @@
+// `$` diagnostics: globals need it inside a function, and only globals have it.
+
+count = 0
+
+// A bare read of a global variable inside a function.
+read_bare = () -> int {
+	return count
+}
+
+// A bare write of one.
+write_bare = () {
+	count += 1
+}
+
+// `$` names a value, not a type.
+bad_type = () -> int {
+	return $String().length
+}
+
+// An unknown global.
+missing = () -> int {
+	return $nope
+}

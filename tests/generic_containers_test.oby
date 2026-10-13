@@ -1,0 +1,72 @@
+// Generic containers: several parameters, nesting, arrays of instances, an
+// overload set inside a generic body, and a self-referential type.
+
+Tally = type<K, V> {
+	K[] keys = []
+	V[] values = []
+
+	put = (K k, V v) {
+		keys.push(k)
+		values.push(v)
+	}
+
+	first_key = () -> K { return keys[0] }
+	first_value = () -> V { return values[0] }
+
+	::new = () -> Tally { return {} }
+}
+
+Box = type<T> {
+	T[] items = []
+
+	push = (T x) { items.push(x) }
+	pop = () -> T { return items.pop() }
+
+	// The receiver written out, and an arity overload.
+	add = (Box b, T x) {
+		b.items.push(x)
+	}
+
+	add = (Box b, T x, T y) {
+		b.items.push(x)
+		b.items.push(y)
+	}
+
+	::new = () -> Box { return {} }
+}
+
+Node = type<T> {
+	T[] values = []
+	Node<T>[] children = []
+
+	::new = () -> Node { return {} }
+}
+
+count_box = (Box<int> b) -> int { return b.items.length }
+
+p = Tally<String, int>()
+p.put("a", 1)
+p.put("b", 2)
+print("${p.first_key()} ${p.first_value()}\n")
+
+// A generic type may be an argument, and an instance a method's element type.
+nested = Box<Box<int>>()
+inner = Box<int>()
+inner.push(7)
+nested.push(inner)
+print("${nested.pop().pop()}\n")
+
+Box<int>[] boxes = []
+o = Box<int>()
+o.add(1)
+o.add(2, 3)
+boxes.push(o)
+print("${count_box(boxes[0])}\n")
+
+// `Node<T>` inside `Node<T>` means this instantiation.
+n = Node<String>()
+n.values.push("root")
+c = Node<String>()
+c.values.push("leaf")
+n.children.push(c)
+print("${n.values[0]} ${n.children[0].values[0]}\n")

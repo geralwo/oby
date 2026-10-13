@@ -1,0 +1,234 @@
+// `switch`: match one value against cases. Each case has its own block and
+// there is no fallthrough.
+
+check = (int cond) {
+	print(int::to_str(1 / cond))
+}
+
+name = (int k) -> String {
+	switch k {
+	case 0 {
+		return "zero"
+	}
+	case 1 {
+		return "one"
+	}
+	case 2 {
+		return "two"
+	}
+	default {
+		return "many"
+	}
+	}
+}
+
+check(name(0) == "zero")
+check(name(1) == "one")
+check(name(2) == "two")
+check(name(9) == "many")
+
+// No fallthrough: only the matching body runs.
+count = 0
+switch 2 {
+case 1 {
+	count += 1
+}
+case 2 {
+	count += 10
+}
+case 3 {
+	count += 100
+}
+}
+check(count == 10)
+
+// Works on enums, characters, and tagged values.
+Color = enum {
+	RED
+	GREEN
+}
+
+describe = (Color c) -> String {
+	switch c {
+	case Color::RED {
+		return "red"
+	}
+	case Color::GREEN {
+		return "green"
+	}
+	default {
+		return "?"
+	}
+	}
+}
+
+check(describe(Color::GREEN) == "green")
+
+kind_of = (String s) -> String {
+	switch s {
+	case "" {
+		return "empty"
+	}
+	case "a" {
+		return "a"
+	}
+	default {
+		return "other"
+	}
+	}
+}
+
+check(kind_of("") == "empty")
+check(kind_of("a") == "a")
+check(kind_of("zz") == "other")
+
+// A `break` inside a switch leaves the enclosing loop, not the switch.
+seen = 0
+i = 0
+while i < 5 {
+	i += 1
+	switch i {
+	case 3 {
+		break
+	}
+	default {
+		seen += 1
+	}
+	}
+}
+check(seen == 2)
+
+// `continue` inside a switch targets the loop too.
+odd = 0
+for (local n = 0; n < 6; n += 1) {
+	switch n % 2 {
+	case 1 {
+		continue
+	}
+	}
+	odd += 1
+}
+check(odd == 3)
+
+// ------------------------------------------------------------------ //
+// Ranges: half-open `[lo, hi)`, constant bounds, integer or enum values.
+// ------------------------------------------------------------------ //
+
+band = (int n) -> String {
+	switch n {
+	case -10..0 {
+		return "negative"
+	}
+	case 0..3 {
+		return "low"
+	}
+	case 3..10 {
+		return "mid"
+	}
+	}
+	return "high"
+}
+check(band(-5) == "negative")
+check(band(0) == "low")     // the lower bound is included
+check(band(2) == "low")
+check(band(3) == "mid")     // the upper bound is not: 3 starts `mid`
+check(band(9) == "mid")
+check(band(10) == "high")
+
+// An empty range matches nothing.
+switch 5 {
+case 5..5 {
+	check(0 == 1)
+}
+default {
+	check(1 == 1)
+}
+}
+
+// First match wins when ranges overlap.
+overlap = (int n) -> int {
+	switch n {
+	case 0..10 {
+		return 1
+	}
+	case 5..15 {
+		return 2
+	}
+	}
+	return 0
+}
+check(overlap(3) == 1)
+check(overlap(7) == 1)     // both hold; the first case wins
+check(overlap(12) == 2)
+
+// A statement switch with no match and no default does nothing.
+ran = 0
+switch 42 {
+case 1..10 {
+	ran = 1
+}
+}
+check(ran == 0)
+
+// ------------------------------------------------------------------ //
+// Guards: `case value if cond` needs both to match.
+// ------------------------------------------------------------------ //
+
+describe2 = (int n) -> String {
+	switch n {
+	case 0..10 if n % 2 == 0 {
+		return "small even"
+	}
+	case 0..10 {
+		return "small odd"
+	}
+	default {
+		return "big"
+	}
+	}
+}
+check(describe2(4) == "small even")
+check(describe2(5) == "small odd")   // the guard failed; the next case gets it
+check(describe2(99) == "big")
+
+pick = (int n, int limit) -> String {
+	switch n {
+	case 7 if n > limit {
+		return "big seven"
+	}
+	case 7 {
+		return "seven"
+	}
+	default {
+		return "other"
+	}
+	}
+}
+check(pick(7, 5) == "big seven")
+check(pick(7, 9) == "seven")
+
+// ------------------------------------------------------------------ //
+// Enums: ranges over item values, and switches that cover every item.
+// ------------------------------------------------------------------ //
+
+Shade = enum {
+	DARK
+	MID
+	LIGHT
+}
+
+// `Shade::DARK..Shade::LIGHT` covers DARK and MID; LIGHT is its own case. The
+// switch is total, so the function needs no trailing return.
+warmth = (Shade s) -> String {
+	switch s {
+	case Shade::DARK..Shade::LIGHT {
+		return "dim"
+	}
+	case Shade::LIGHT {
+		return "bright"
+	}
+	}
+}
+check(warmth(Shade::DARK) == "dim")
+check(warmth(Shade::MID) == "dim")
+check(warmth(Shade::LIGHT) == "bright")

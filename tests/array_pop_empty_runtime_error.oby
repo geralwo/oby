@@ -1,0 +1,4 @@
+// Popping an empty array is a runtime error.
+nums = [1]
+x = nums.pop()
+y = nums.pop()

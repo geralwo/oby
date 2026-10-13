@@ -1,0 +1,7 @@
+// A body is checked per instantiation: `T v = null` is fine for `String` and
+// an error for `int`, reported on the template's own line.
+
+Opt = type<T> { T v = null }
+
+Opt<String> s = {}
+Opt<int> i = {}

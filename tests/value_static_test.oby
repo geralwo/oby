@@ -1,0 +1,17 @@
+// A static member of a value's type. `box::name` lives in global storage, not
+// inside the object, so reading it must not touch the value.
+
+check = (int cond) {
+	print(int::to_str(1 / cond))
+}
+
+box = {}
+box::count = 7
+check(box::count == 7)
+
+box::helper = (int x) -> int { return x * 2 }
+check(box::helper(21) == 42)
+
+// Writing through the value updates the same static.
+box::count = 8
+check(box::count == 8)
