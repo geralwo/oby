@@ -44,6 +44,17 @@ typedef struct {
 void lexer_init(Lexer *l, const char *source);
 Token scan_token(Lexer *l);
 
+/* Given the text just after a `${`, find the end of the interpolation body:
+   returns a pointer to its matching `}`, or NULL when there is none. Braces
+   balance outside nested string literals; a nested string is scanned with the
+   ordinary escape rules and may hold an interpolation of its own. `end` may be
+   NULL for NUL-terminated text.
+
+   On failure, `bad` (when not NULL) receives the position of a stray `\` in the
+   body — the one cause the scan can name itself, since a backslash outside a
+   string is not valid code — and NULL when the cause is running out of input. */
+const char *interp_body_end(const char *text, const char *end, const char **bad);
+
 /* Human-readable name for a token kind, e.g. "'('", "identifier", "end of file". */
 const char *token_kind_name(TokenKind kind);
 

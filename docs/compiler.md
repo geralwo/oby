@@ -32,9 +32,10 @@ one token at a time.
 - **Comments** (`// ...`), spaces, tabs and carriage returns are skipped.
 - **Numbers** are `digit+ ('.' digit+)? ([eE][+-]? digit+)?`. A `.` joins the
   number only when a digit follows, so `1.method` is `1` `.` `method`.
-- **Strings** are scanned to the closing `"`; `\"` does not end them. Escapes and
-  interpolation are *not* handled here — the raw text is kept and the parser
-  expands it.
+- **Strings** are scanned to the closing `"`; `\"` does not end them, and a
+  `${...}` interpolation is skipped as a whole, so a quote inside it cannot end
+  the literal either. Outside interpolations the raw text is kept and the parser
+  expands it; inside them the text is code, taken verbatim.
 - **Identifiers** must start with a letter. Keywords are not distinguished: the
   parser recognises them contextually.
 - A bad character yields `TOKEN_ERROR` carrying a message; the parser reports it.
@@ -57,9 +58,10 @@ the rest.
 
 **Strings.** `parse_string` expands escapes (`\n`, `\t`, `\r`, `\0`, `\e`, `\\`,
 `\"`, `\$`, `\xHH`) and splits `${...}` interpolation into an
-`AST_INTERPOLATED_STRING` whose parts are literals and expressions. The
-interpolation body is parsed by a **sub-parser** bounded to the `${...}` text, so
-diagnostics inside it keep real line positions.
+`AST_INTERPOLATED_STRING` whose parts are literals and expressions. A body goes
+to a **sub-parser** verbatim — it is code, so the enclosing literal's escapes do
+not reach inside it — and `interp_body_end` (in `lexer.c`) finds the body's `}`
+for the lexer and for this split alike, so the two cannot disagree.
 
 ## 3. The AST
 
@@ -166,10 +168,9 @@ a `use`d file also shows how it was reached:
 | `oby -h` / `-v` | help / version |
 
 Everything after the script path belongs to the script, not to `oby`: a flag
-written there is not an option. `args()` is the command line the program sees —
-`[0]` is the script path (or the executable, when the program is bundled) and
-the rest are its arguments — so `oby tool.oby -check` runs `tool.oby` with
-`-check` as `args()[1]`.
+written there is not an option. `args()` is the process's command line — how the
+binary was invoked, then the script path and its arguments — so
+`./build/oby tool.oby -check` runs `tool.oby` with `-check` as `args()[2]`.
 
 `-printast` output comes from `ast_printer.c`: an indented tree where each node
 shows its kind, its resolved type, and the names involved.

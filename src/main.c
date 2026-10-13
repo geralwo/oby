@@ -27,7 +27,6 @@ const char *oby_version_str = "0.6.3";
 typedef struct {
     const char *input;   /* script to compile, or NULL */
     const char *output;  /* --bundle: the executable to write */
-    int arg_index;       /* argv index of the first script argument (argc: none) */
     bool bundle;         /* --bundle: build a standalone executable */
     bool print_ast;      /* -printast: dump the typed AST */
     bool check_only;     /* -check: stop after diagnostics */
@@ -50,7 +49,6 @@ static void print_usage(const char *prog) {
 static bool parse_args(int argc, char **argv, Options *opts) {
     opts->input = NULL;
     opts->output = NULL;
-    opts->arg_index = argc;
     opts->bundle = false;
     opts->print_ast = false;
     opts->check_only = false;
@@ -60,10 +58,7 @@ static bool parse_args(int argc, char **argv, Options *opts) {
 
         /* Everything after the script path belongs to the script. */
         if (opts->input != NULL) {
-            if (!opts->bundle) {
-                opts->arg_index = i;
-                break;
-            }
+            if (!opts->bundle) break;
             if (opts->output == NULL) {
                 opts->output = arg;
                 continue;
@@ -353,10 +348,9 @@ static bool try_run_bundle(const char *argv0, int *status) {
 }
 
 int main(int argc, char *argv[]) {
-    /* The command line the program sees. A bundled binary *is* the program, so
-       its argv is the whole command line and args()[0] is the executable; the
-       CLI re-slices below, where args()[0] becomes the script path. `parse_args`
-       knows that index; a bundled binary never gets there. */
+    /* The command line as the process saw it, for `args()`: how this binary was
+       invoked — the interpreter, or the executable itself when bundled — then
+       the script (if any) and its arguments. Nothing here interprets them. */
     os_args_init(argc, argv);
 
     int bundle_status = 0;
@@ -371,8 +365,6 @@ int main(int argc, char *argv[]) {
         print_usage(argv[0]);
         return 1;
     }
-
-    os_args_init(argc - opts.arg_index + 1, argv + opts.arg_index - 1);
 
     if (opts.bundle) return bundle_command(argv[0], opts.input, opts.output);
 

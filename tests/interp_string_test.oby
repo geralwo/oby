@@ -1,0 +1,12 @@
+// The body of `${...}` is ordinary code: its strings are written plainly, and
+// their escapes are the ordinary single ones — the enclosing literal's escapes
+// stop at the `${`. A `}` inside a nested string is just a byte of it, and a
+// nested string may hold an interpolation of its own.
+m = Map<String, int>()
+m.set("a", 41)
+name = "Peter"
+f = (String s) -> int { return s.length }
+print("${m.get("a", 0) + 1}\n")
+print("${ "a}b".length }\n")
+print("${ "a\nb".length }\n")
+print("${ f("${name}") }\n")

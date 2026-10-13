@@ -1,0 +1,5 @@
+// The body of `${...}` is code, so the enclosing literal's escapes do not apply
+// there: writing `\"` for a quote (which the old spelling required) is a stray
+// backslash now, and the quotes go in plainly.
+f = (String s) -> int { return s.length }
+print("${ f(\"x\") }")

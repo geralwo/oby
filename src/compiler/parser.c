@@ -292,8 +292,9 @@ static ASTNode *make_char_literal(Parser *p, Token t) {
     return node;
 }
 
-/* Parse one `${ ... }` body. The text points into the original source, so the
-   sub-lexer is bounded to it and diagnostics keep real positions. */
+/* Parse one `${ ... }` body. The text is ordinary code: the enclosing literal's
+   escapes do not apply inside it, so it goes to the sub-lexer verbatim, bounded
+   to the `}` and keeping diagnostics on the real line. */
 static ASTNode *parse_interp_expr(Parser *p, Token at, const char *text, size_t len) {
     Lexer sub;
     lexer_init(&sub, text);
@@ -334,22 +335,19 @@ ASTNode *parse_string(Parser *p) {
             array_push(node->as.interpolated.parts, &lit);
         }
 
-        size_t j = i + 2;
-        int depth = 1;
-        while (j < n) {
-            if (src[j] == '{') depth++;
-            else if (src[j] == '}') { depth--; if (depth == 0) break; }
-            j++;
-        }
-        if (j >= n) {
+        const char *body = src + i + 2;
+        /* No `bad` out-param here: the lexer scans the same text with the same
+           helper, so it has already reported a stray backslash. */
+        const char *close = interp_body_end(body, src + n, NULL);
+        if (!close) {
             diag_error(p->diag, t, "unterminated '${' in string");
             p->had_error = true;
             return node;
         }
 
-        ASTNode *expr = parse_interp_expr(p, t, src + i + 2, j - (i + 2));
+        ASTNode *expr = parse_interp_expr(p, t, body, (size_t)(close - body));
         if (expr) array_push(node->as.interpolated.parts, &expr);
-        i = j + 1;
+        i = (size_t)(close - src) + 1;
         seg = i;
     }
 

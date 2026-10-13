@@ -104,17 +104,17 @@ name = "oby"
 print("hello ${name}!")
 ```
 
-An unterminated `${` is an error. Nested braces are balanced, so `${f({a=1})}`
-is one expression.
-
-A **string literal cannot appear inside `${...}`**: the text is re-lexed from
-the raw source, so an escaped quote is not an escape there (`"${f(\"x\")}"` is
-an error), and the `${` search stops at the first `}`, even inside quotes. Bind
-it first:
+An unterminated `${` is an error. **The body is ordinary code**: the enclosing
+literal's escapes do not apply inside it, so a string there is written plainly,
+and its escapes follow the usual rules. Braces balance outside nested string
+literals, so `${f({a=1})}` is one expression, and a `}` inside a nested literal
+is just a byte of it:
 
 ```
-k = "a"
-print("${m.get(k, 0)}")
+m = Map<String, int>()
+print("${m.get("a", 0)}")     // quotes are plain here
+print("${ "a}b".length }")    // 3: a `}` inside a nested string
+print("${ "a\nb".length }")   // 3: one escape level — the nested string's own
 ```
 
 ## 3. Names and paths
@@ -1066,11 +1066,11 @@ and must not be freed twice or through an alias. Values that are not heap
 allocated (numbers, functions) are ignored. A view such as `s.buffer` is owned
 by its string and is not freed.
 
-`args()` is the command line the program was run with: `args()[0]` is the program
-itself — the script path, or the executable when the program is bundled — and
-the rest are its arguments, so `oby tool.oby a b` and a bundled `tool a b` both
-see `"a"` and `"b"` after it. Nothing after the script path is interpreted by the
-compiler: a flag there belongs to the script.
+`args()` is the command line as the process saw it: `args()[0]` is how the binary
+was invoked — `./build/oby`, or the executable itself when the program is bundled
+— then the script path and its arguments, so `./build/oby tool.oby a b` sees all
+four. Nothing after the script path is interpreted by the compiler: a flag there
+belongs to the script.
 
 `byte::new` is the explicit narrowing conversion (`byte(300)` is `44`); the type
 system never narrows implicitly. The signed ↔ unsigned constructors

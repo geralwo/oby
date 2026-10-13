@@ -163,7 +163,84 @@ static Token identifier(Lexer *l) {
     return error_token(l, "identifier must start with a letter");
 }
 
+/* ------------------------------------------------------------------ */
+/* Interpolation bodies                                                */
+/* ------------------------------------------------------------------ */
+
+/* True at a scan bound: an explicit `end` or the NUL of an unbounded source. */
+static bool scan_end(const char *p, const char *end) {
+    return end ? p >= end : *p == '\0';
+}
+
+static const char *body_end_from(const char *p, const char *end, const char **bad);
+
+/* Skip a string literal inside a body (`p` is its opening quote). Escapes are
+   the ordinary ones here: the body is code, so the enclosing literal's escapes
+   do not apply to it. NULL when the input runs out. */
+static const char *skip_body_string(const char *p, const char *end, const char **bad) {
+    p++; /* the opening quote */
+    while (!scan_end(p, end)) {
+        if (*p == '\\') {
+            p++;
+            if (scan_end(p, end)) return NULL;
+            p++;
+            continue;
+        }
+        if (*p == '"') return p + 1;
+        if (*p == '$' && !scan_end(p + 1, end) && p[1] == '{') {
+            const char *close = body_end_from(p + 2, end, bad);
+            if (!close) return NULL;
+            p = close + 1;
+            continue;
+        }
+        p++;
+    }
+    return NULL;
+}
+
+/* The body of a `${...}`: `p` is just after the `{`. Returns its matching `}`,
+   or NULL when the input runs out first. */
+static const char *body_end_from(const char *p, const char *end, const char **bad) {
+    int depth = 1;
+    while (!scan_end(p, end)) {
+        char c = *p;
+        if (c == '"') {
+            const char *after = skip_body_string(p, end, bad);
+            if (!after) return NULL;
+            p = after;
+            continue;
+        }
+        if (c == '\\') {
+            /* At this level we are looking at code, where a backslash is never
+               valid: say so rather than "the body never ended". */
+            if (bad) *bad = p;
+            return NULL;
+        }
+        if (c == '{') {
+            depth++;
+        } else if (c == '}') {
+            depth--;
+            if (depth == 0) return p;
+        }
+        p++;
+    }
+    return NULL;
+}
+
+const char *interp_body_end(const char *text, const char *end, const char **bad) {
+    if (bad) *bad = NULL;
+    return body_end_from(text, end, bad);
+}
+
+/* The line of `at`, counted from `from`, which sits on `line`. */
+static int line_at(const char *from, const char *at, int line) {
+    for (; from < at; from++)
+        if (*from == '\n') line++;
+    return line;
+}
+
 static Token string(Lexer *l) {
+    unsigned start_line = l->line;
     while (!is_at_end(l)) {
         char c = peek(l);
         if (c == '\\') {           /* keep `\"` from ending the string */
@@ -174,10 +251,35 @@ static Token string(Lexer *l) {
         }
         if (c == '"') break;
         if (c == '\n') l->line++;
+        if (c == '$' && peek_next(l) == '{') {
+            /* The body is skipped whole — it is code of its own, so its quotes
+               and braces cannot end (or split) this literal. */
+            const char *body = l->current + 2;
+            const char *bad = NULL;
+            const char *close = interp_body_end(body, l->end, &bad);
+            if (!close) {
+                if (bad) {
+                    Token token = error_token(l, "unexpected character '\\'");
+                    token.start = bad;
+                    token.length = 1;
+                    token.line = line_at(l->start, bad, (int)start_line);
+                    return token;
+                }
+                l->line = start_line;   /* report where the literal began */
+                return error_token(l, "unterminated '${' in string");
+            }
+            for (const char *p = body; p < close; p++)
+                if (*p == '\n') l->line++;
+            l->current = close + 1;     /* past the `}` */
+            continue;
+        }
         advance(l);
     }
 
-    if (is_at_end(l)) return error_token(l, "unterminated string");
+    if (is_at_end(l)) {
+        l->line = start_line;
+        return error_token(l, "unterminated string");
+    }
 
     advance(l); // The closing quote
     return make_token(l, TOKEN_STRING);

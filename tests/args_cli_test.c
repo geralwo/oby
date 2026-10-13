@@ -1,7 +1,7 @@
-/* Command-line arguments: `args()[0]` is the program (the script path) and the
-   rest are its arguments. Everything after the script path is the script's, so
-   `oby` is driven through the shell here — the harness itself runs tests without
-   arguments. */
+/* Command-line arguments: `args()[0]` is the interpreter, `args()[1]` the script
+   path, and the rest are its arguments — the process's command line as it was.
+   Everything after the script path is the script's, so `oby` is driven through
+   the shell here: the harness itself runs tests without arguments. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -64,15 +64,15 @@ int main(void) {
                              "}\n"));
 
     check_output("no arguments", "build/oby " SCRIPT " > " OUT,
-                 "1\n" SCRIPT "\n");
+                 "2\nbuild/oby\n" SCRIPT "\n");
     check_output("one argument", "build/oby " SCRIPT " one > " OUT,
-                 "2\n" SCRIPT "\none\n");
+                 "3\nbuild/oby\n" SCRIPT "\none\n");
     check_output("arguments are passed verbatim",
                  "build/oby " SCRIPT " alpha --level 3 -x > " OUT,
-                 "5\n" SCRIPT "\nalpha\n--level\n3\n-x\n");
+                 "6\nbuild/oby\n" SCRIPT "\nalpha\n--level\n3\n-x\n");
     check_output("a quoted argument survives",
                  "build/oby " SCRIPT " 'two words' > " OUT,
-                 "2\n" SCRIPT "\ntwo words\n");
+                 "3\nbuild/oby\n" SCRIPT "\ntwo words\n");
 
     check("-check accepts trailing arguments",
           system("build/oby -check " SCRIPT " alpha > /dev/null 2>&1") == 0);

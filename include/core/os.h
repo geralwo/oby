@@ -10,10 +10,10 @@
    cannot tell. Returns false when nothing fits `size`. */
 bool os_get_executable_path(const char *argv0, char *buf, size_t size);
 
-/* The command line a program sees, for `io_args`: `args[0]` is the program
-   itself — the script path, or the executable in a bundled binary — and the
-   rest are its arguments. The caller picks the slice; the strings are borrowed
-   and live as long as the process. */
+/* The command line a program sees, for `io_args`: exactly the process's argv,
+   so `args[0]` is how the binary was invoked — the interpreter, or the
+   executable when bundled — then the script and its arguments. The strings are
+   borrowed and live as long as the process. */
 void os_args_init(int count, char **args);
 
 /* How many arguments there are, and one of them (NULL when out of range). */
