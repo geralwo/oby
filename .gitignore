@@ -4,4 +4,6 @@ plans/
 
 !src/prelude/*.oby
 !tests/**/*.oby
-!games/**/*.oby
+
+# Everything else that is `.oby` stays untracked — `examples/` and scratch
+# scripts are working space, not repository content.
