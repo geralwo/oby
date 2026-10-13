@@ -51,3 +51,9 @@ use "Set.oby"
 // The same buffered write as `Terminal::print`; `Terminal::flush` makes it
 // visible immediately.
 print = extern term_print(String s) -> void
+
+// The arguments the program was given: everything after the script path, so
+// `oby tool.oby a b` and a bundled `tool a b` both see ["a", "b"]. A bundled
+// executable is its own interpreter, so there its arguments start after the
+// executable itself.
+args = extern io_args() -> String[]

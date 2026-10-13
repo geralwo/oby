@@ -159,11 +159,16 @@ a `use`d file also shows how it was reached:
 
 | Invocation | Effect |
 |------------|--------|
-| `oby <script.oby>` | compile and run |
+| `oby <script.oby> [arguments...]` | compile and run |
 | `oby -check <script.oby>` | stop after sema (parse + typecheck) |
 | `oby -printast <script.oby>` | print the typed AST (when there are no errors) |
 | `oby --bundle <script.oby> <output>` | write a standalone executable |
 | `oby -h` / `-v` | help / version |
+
+Everything after the script path belongs to the script, not to `oby`: it is what
+`args()` returns, and a flag written there is not an option. Options are only
+recognized before the script path, so `oby tool.oby -check` runs `tool.oby` with
+`-check` as an argument.
 
 `-printast` output comes from `ast_printer.c`: an indented tree where each node
 shows its kind, its resolved type, and the names involved.

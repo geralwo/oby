@@ -40,3 +40,24 @@ bool os_get_executable_path(const char *argv0, char *buf, size_t size) {
 #endif
     return from_argv0(argv0, buf, size);
 }
+
+/* ------------------------------------------------------------------ */
+/* Command line                                                       */
+/* ------------------------------------------------------------------ */
+
+static int    g_arg_count = 0;
+static char **g_args = NULL;
+
+void os_args_init(int count, char **args) {
+    g_arg_count = count;
+    g_args = args;
+}
+
+int os_args_count(void) {
+    return g_arg_count;
+}
+
+const char *os_arg(int index) {
+    if (!g_args || index < 0 || index >= g_arg_count) return NULL;
+    return g_args[index];
+}

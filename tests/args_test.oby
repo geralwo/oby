@@ -1,0 +1,3 @@
+// The harness runs a test with no arguments, so `args()` is there and empty.
+// `tests/args_cli_test.c` covers passing real ones.
+print("${args().length}\n")

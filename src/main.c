@@ -21,12 +21,13 @@
 #include "vm/image.h"
 #include "vm/vm.h"
 
-const char *oby_version_str = "0.6.0";
+const char *oby_version_str = "0.6.1";
 
 /* Command-line options. */
 typedef struct {
     const char *input;   /* script to compile, or NULL */
     const char *output;  /* --bundle: the executable to write */
+    int arg_index;       /* argv index of the first script argument (argc: none) */
     bool bundle;         /* --bundle: build a standalone executable */
     bool print_ast;      /* -printast: dump the typed AST */
     bool check_only;     /* -check: stop after diagnostics */
@@ -34,7 +35,7 @@ typedef struct {
 
 static void print_usage(const char *prog) {
     printf("oby %s - compiler for the OBY scripting language\n\n", oby_version_str);
-    printf("usage: %s [options] <script.oby>\n\n", prog);
+    printf("usage: %s [options] <script.oby> [arguments...]\n\n", prog);
     printf("options:\n");
     printf("  -check         check the script for errors (parse + typecheck)\n");
     printf("  -printast      print the parsed and typed AST\n");
@@ -49,12 +50,29 @@ static void print_usage(const char *prog) {
 static bool parse_args(int argc, char **argv, Options *opts) {
     opts->input = NULL;
     opts->output = NULL;
+    opts->arg_index = argc;
     opts->bundle = false;
     opts->print_ast = false;
     opts->check_only = false;
 
     for (int i = 1; i < argc; i++) {
         const char *arg = argv[i];
+
+        /* Everything after the script path belongs to the script. */
+        if (opts->input != NULL) {
+            if (!opts->bundle) {
+                opts->arg_index = i;
+                break;
+            }
+            if (opts->output == NULL) {
+                opts->output = arg;
+                continue;
+            }
+            fprintf(stderr,
+                    "error: --bundle takes an entry script and an output path, not '%s'\n",
+                    arg);
+            return false;
+        }
 
         if (strcmp(arg, "-h") == 0 || strcmp(arg, "--help") == 0) {
             print_usage(argv[0]);
@@ -72,13 +90,8 @@ static bool parse_args(int argc, char **argv, Options *opts) {
             fprintf(stderr, "error: unknown option '%s'\n", arg);
             print_usage(argv[0]);
             return false;
-        } else if (opts->input == NULL) {
-            opts->input = arg;
-        } else if (opts->bundle && opts->output == NULL) {
-            opts->output = arg;
         } else {
-            fprintf(stderr, "error: unexpected argument '%s'\n", arg);
-            return false;
+            opts->input = arg;
         }
     }
 
@@ -340,6 +353,12 @@ static bool try_run_bundle(const char *argv0, int *status) {
 }
 
 int main(int argc, char *argv[]) {
+    /* The arguments the program was given. `parse_args` below re-slices them
+       after the script path once it knows where that is; a bundled binary
+       never gets there, so argv[1..] is what its program sees. Nothing reads
+       them unless the program asks for `args()`. */
+    os_args_init(argc > 0 ? argc - 1 : 0, argv + 1);
+
     int bundle_status = 0;
     if (try_run_bundle(argv[0], &bundle_status)) return bundle_status;
 
@@ -352,6 +371,8 @@ int main(int argc, char *argv[]) {
         print_usage(argv[0]);
         return 1;
     }
+
+    os_args_init(argc - opts.arg_index, argv + opts.arg_index);
 
     if (opts.bundle) return bundle_command(argv[0], opts.input, opts.output);
 

@@ -10,4 +10,13 @@
    cannot tell. Returns false when nothing fits `size`. */
 bool os_get_executable_path(const char *argv0, char *buf, size_t size);
 
+/* The arguments the program was given, for `io_args`. The caller picks the
+   slice: everything after the script path, or after `argv[0]` in a bundled
+   binary. The strings are borrowed and live as long as the process. */
+void os_args_init(int count, char **args);
+
+/* How many arguments there are, and one of them (NULL when out of range). */
+int os_args_count(void);
+const char *os_arg(int index);
+
 #endif // OBY_OS_H

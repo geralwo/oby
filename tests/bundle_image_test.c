@@ -118,6 +118,18 @@ int main(void) {
     check("output still correct", actual && strcmp(actual, "85\n") == 0);
     free(actual);
 
+    /* A bundled executable takes arguments too: everything after the
+       executable itself is what its program sees. */
+    check("args script written",
+          write_file(DIR "/args.oby", "print(\"${args().length} ${args()[0]}\\n\")\n"));
+    check("args bundle",
+          system("build/oby --bundle " DIR "/args.oby " DIR "/args_app > /dev/null") == 0);
+    check("bundled run with arguments",
+          system("cd tests && ../" DIR "/args_app one two > ../" OUT) == 0);
+    actual = read_all(OUT);
+    check("bundled arguments seen", actual && strcmp(actual, "2 one\n") == 0);
+    free(actual);
+
     /* Failures: usage, a missing script, a script with errors. None may leave
        an output behind. */
     check("--bundle without an output is a usage error",

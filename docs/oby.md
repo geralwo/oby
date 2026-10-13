@@ -1054,7 +1054,7 @@ baked into the binary at build time (see [`prelude.md`](prelude.md)), so the
 compiler and any binary built from it work from any working directory.
 
 `core.oby` attaches the native numeric types' constructors (`int::new`,
-`uint::new`, ...), defines `print`, and declares `object::free`:
+`uint::new`, ...), defines `print` and `args`, and declares `object::free`:
 
 ```
 `object::free = extern ob_free(object o) -> void
@@ -1065,6 +1065,12 @@ GC, so this is how memory is reclaimed. The value must not be used afterwards,
 and must not be freed twice or through an alias. Values that are not heap
 allocated (numbers, functions) are ignored. A view such as `s.buffer` is owned
 by its string and is not freed.
+
+`args()` is the arguments the program was given: everything after the script
+path, so `oby tool.oby a b` and a bundled `tool a b` both see `["a", "b"]` (a
+bundled executable is its own interpreter, so there its arguments start after
+the executable itself). Nothing after the script path is interpreted by the
+compiler: a flag there belongs to the script.
 
 `byte::new` is the explicit narrowing conversion (`byte(300)` is `44`); the type
 system never narrows implicitly. The signed ↔ unsigned constructors
@@ -1120,8 +1126,9 @@ oby --bundle game/main.oby game
 
 The output is **a copy of `oby` with the compiled program appended**, so it
 needs no OBY installation, no `src/prelude/`, no script files and no toolchain:
-it compiles nothing at startup. Delete the sources and it still runs (a bundled
-binary ignores its arguments). Imports are baked in at bundle time, so a `use`
+it compiles nothing at startup. Delete the sources and it still runs, and it
+takes its own arguments: everything after the executable is what `args()`
+returns. Imports are baked in at bundle time, so a `use`
 of something that does not exist is a bundle-time error like any other
 diagnostic.
 

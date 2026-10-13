@@ -9,6 +9,7 @@
 #include "native/io.h"
 #include "native/native.h"
 #include "core/array.h"
+#include "core/os.h"
 #include "core/string.h"
 
 /*
@@ -676,6 +677,24 @@ static Value nat_read_dir(Value *args, int argc) {
 /* Process context                                                     */
 /* ------------------------------------------------------------------ */
 
+/* io_args() -> String[] : the arguments the program was given — everything
+   after the script path, or after the executable itself when bundled. */
+static Value nat_args(Value *args, int argc) {
+    (void)args;
+    (void)argc;
+    Array *out = array_new(sizeof(Value));
+    if (!out) return val_null();
+    for (int i = 0; i < os_args_count(); i++) {
+        const char *value = os_arg(i);
+        if (!value) continue;
+        String *s = string_new(value);
+        if (!s) continue;
+        Value v = val_string(s);
+        array_push(out, &v);
+    }
+    return val_array(out);
+}
+
 /* io_cwd() -> String : the working directory, or null. */
 static Value nat_cwd(Value *args, int argc) {
     (void)args;
@@ -742,4 +761,5 @@ void io_register_natives(void) {
     native_add("io_cwd", nat_cwd);
     native_add("io_getenv", nat_getenv);
     native_add("io_last_error", nat_last_error);
+    native_add("io_args", nat_args);
 }

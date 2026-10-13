@@ -36,7 +36,7 @@ top-level functions (`core.oby`, `io.oby`, `vec.oby`, `math.oby`).
 `byte`, `float`, `vec2i`); object types and namespaces are PascalCase (`File`,
 `Terminal`, `Input`). `io` is the one lowercase namespace — kept because
 `io::write` reads well and appears everywhere. A few conveniences live at top
-level rather than behind a namespace: `print`, `rand`, `read_file`,
+level rather than behind a namespace: `print`, `args`, `rand`, `read_file`,
 `write_file`.
 
 ### `core.oby`
@@ -58,6 +58,7 @@ level rather than behind a namespace: `print`, `rand`, `read_file`,
 | `uint64::to_str(uint64) -> String` | `extern uint64_to_str` |
 | `int64::to_str(int64) -> String` | `extern int64_to_str` |
 | `print(String)` | buffered write to stdout; `Terminal::flush()` makes it visible |
+| `args() -> String[]` | the program's arguments: after the script path, or after the executable when bundled (`extern io_args`) |
 
 Crossing signedness is never implicit, so the constructors that do it are
 natives: `uint(i)`, `int(u)`, `uint64(i64)`, `int64(u64)`, and `uint` from the
