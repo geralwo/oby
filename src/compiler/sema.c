@@ -4335,6 +4335,44 @@ static void assign_global_slots(Sema *s) {
     }
 }
 
+/* The embedded prelude key `path` names, or NULL when it is not one of the
+   prelude's own files. Matched by path suffix, so the absolute spelling the
+   language server arrives with (`/mnt/c/…/src/prelude/core.oby`) works. */
+static const char *prelude_key_for(const char *path) {
+    size_t pl = strlen(path);
+    const EmbeddedFile *files = NULL;
+    size_t count = embed_static_files(&files);
+    for (size_t i = 0; i < count; i++) {
+        const char *key = files[i].path;
+        size_t kl = strlen(key);
+        if (kl == 0 || pl < kl) continue;
+        if (strcmp(path + pl - kl, key) != 0) continue;
+        if (pl > kl && path[pl - kl - 1] != '/') continue;   /* a path tail, not a name tail */
+        return key;
+    }
+    return NULL;
+}
+
+/* Register the entry file in the pragma-once set. A `use` that leads back to
+   it is then a no-op, and when the entry *is* one of the embedded prelude files
+   — the language server checks `src/prelude/File.oby` while it is open in the
+   editor — its key is registered too, so the prelude's own import of that file
+   does not load a second copy whose definitions would clash with the entry's. */
+static void seed_entry_loaded(Sema *s, const char *entry) {
+    size_t el = strlen(entry);
+    char *stored = (char *)arena_alloc(s->arena, el + 1);
+    memcpy(stored, entry, el + 1);
+    array_push(s->loaded, &stored);
+
+    const char *key = prelude_key_for(entry);
+    if (key) {
+        size_t kl = strlen(key);
+        char *kstored = (char *)arena_alloc(s->arena, kl + 1);
+        memcpy(kstored, key, kl + 1);
+        array_push(s->loaded, &kstored);
+    }
+}
+
 void sema_check(Sema *s, ASTNode *program, const char *path) {
     /* One canonical spelling for the entry, so a `use` that leads back to it
        is recognized as already loaded. */
@@ -4358,6 +4396,11 @@ void sema_check(Sema *s, ASTNode *program, const char *path) {
     scope_define(s->arena, s->global, "int64", s->types.int64_type, SYM_TYPE, false);
     scope_define(s->arena, s->global, "uint64", s->types.uint64_type, SYM_TYPE, false);
 
+    /* The entry is registered before the prelude loads: an import that leads
+       back to it — or, when it is a prelude file being edited, to its embedded
+       copy — becomes a pragma-once no-op rather than a second compile. */
+    seed_entry_loaded(s, entry);
+
     /* The prelude is injected before the user script. */
     load_prelude(s);
     if (s->had_error) return;
@@ -4377,13 +4420,18 @@ void sema_check(Sema *s, ASTNode *program, const char *path) {
     main_unit->file = main_file;
     main_unit->source = main_src;
 
-    /* The entry is already being compiled: registering it makes an import
-       cycle back to the entry a pragma-once no-op, not a second compile. */
-    array_push(s->loaded, &entry);
+    /* A prelude file being edited imports its siblings from the prelude's own
+       directory — the embedded copy — when the path it arrived with has no
+       directory on this side, which is what happens when a client elsewhere
+       (Zed on Windows, say) labels the file with its own path spelling. */
+    const char *import_dir = s->main_dir;
+    const char *prelude_key = prelude_key_for(entry);
+    if (prelude_key && !source_exists(s->main_dir))
+        import_dir = path_dir(prelude_key, s->arena);
 
     /* Imports are pushed ahead of the file that `use`s them, so a program is
        compiled after everything it depends on. */
-    collect_types(s, program, s->main_dir);
+    collect_types(s, program, import_dir);
     array_push(s->programs, &main_unit);
     if (s->had_error) return; /* a failed import is fatal */
 
