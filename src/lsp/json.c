@@ -471,32 +471,100 @@ bool json_int(const JsonValue *value, long long *out) {
     return true;
 }
 
+/* The JSON replacement text for one byte, written into `buf` (8 bytes). */
+static const char *escape_rep(unsigned char c, char *buf) {
+    switch (c) {
+        case '"':  return "\\\"";
+        case '\\': return "\\\\";
+        case '\b': return "\\b";
+        case '\f': return "\\f";
+        case '\n': return "\\n";
+        case '\r': return "\\r";
+        case '\t': return "\\t";
+        default:
+            if (c < 0x20) {
+                snprintf(buf, 8, "\\u%04x", (unsigned)c);
+                return buf;
+            }
+            buf[0] = (char)c;
+            buf[1] = '\0';
+            return buf;
+    }
+}
+
 void json_escape(char *dst, size_t cap, const char *src) {
     if (cap == 0) return;
     size_t o = 0;
     for (const unsigned char *p = (const unsigned char *)src; *p; p++) {
-        char single[2] = { (char)*p, '\0' };
-        char buf[8];
-        const char *rep = single;
-        switch (*p) {
-            case '"':  rep = "\\\""; break;
-            case '\\': rep = "\\\\"; break;
-            case '\b': rep = "\\b"; break;
-            case '\f': rep = "\\f"; break;
-            case '\n': rep = "\\n"; break;
-            case '\r': rep = "\\r"; break;
-            case '\t': rep = "\\t"; break;
-            default:
-                if (*p < 0x20) {
-                    snprintf(buf, sizeof buf, "\\u%04x", (unsigned)*p);
-                    rep = buf;
-                }
-                break;
-        }
+        char rep_buf[8];
+        const char *rep = escape_rep(*p, rep_buf);
         size_t rl = strlen(rep);
         if (o + rl + 1 > cap) break;
         memcpy(dst + o, rep, rl);
         o += rl;
     }
     dst[o] = '\0';
+}
+
+/* ------------------------------------------------------------------ */
+/* Response buffers                                                   */
+/* ------------------------------------------------------------------ */
+
+static bool buf_reserve(JsonBuf *b, size_t extra) {
+    if (b->oom) return false;
+    if (b->len + extra + 1 <= b->cap) return true;
+    size_t cap = b->cap ? b->cap : 256;
+    while (cap < b->len + extra + 1) cap *= 2;
+    char *grown = (char *)realloc(b->data, cap);
+    if (!grown) {
+        b->oom = true;
+        return false;
+    }
+    b->data = grown;
+    b->cap = cap;
+    return true;
+}
+
+void json_buf_init(JsonBuf *b) {
+    b->data = NULL;
+    b->len = 0;
+    b->cap = 0;
+    b->oom = false;
+}
+
+void json_buf_free(JsonBuf *b) {
+    free(b->data);
+    json_buf_init(b);
+}
+
+void json_buf_printf(JsonBuf *b, const char *fmt, ...) {
+    va_list ap, copy;
+    va_start(ap, fmt);
+    va_copy(copy, ap);
+    int needed = vsnprintf(NULL, 0, fmt, ap);
+    va_end(ap);
+    if (needed < 0) {
+        va_end(copy);
+        b->oom = true;
+        return;
+    }
+    if (!buf_reserve(b, (size_t)needed)) {
+        va_end(copy);
+        return;
+    }
+    vsnprintf(b->data + b->len, (size_t)needed + 1, fmt, copy);
+    va_end(copy);
+    b->len += (size_t)needed;
+}
+
+void json_buf_escape(JsonBuf *b, const char *s) {
+    for (const unsigned char *p = (const unsigned char *)s; *p; p++) {
+        char rep_buf[8];
+        const char *rep = escape_rep(*p, rep_buf);
+        if (!buf_reserve(b, 6)) return;
+        size_t rl = strlen(rep);
+        memcpy(b->data + b->len, rep, rl);
+        b->len += rl;
+        b->data[b->len] = '\0';
+    }
 }

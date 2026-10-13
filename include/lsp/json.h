@@ -70,4 +70,19 @@ bool json_int(const JsonValue *value, long long *out);
    into `dst`, NUL-terminated, truncated to `cap`. */
 void json_escape(char *dst, size_t cap, const char *src);
 
+/* A growable buffer for building response bodies (diagnostic arrays and the
+   like). It stays NUL-terminated as it grows; `oom` is set when an allocation
+   failed, and the buffer then holds only a prefix and must not be sent. */
+typedef struct {
+    char  *data;   /* NULL until the first append */
+    size_t len;
+    size_t cap;
+    bool   oom;
+} JsonBuf;
+
+void json_buf_init(JsonBuf *b);
+void json_buf_free(JsonBuf *b);
+void json_buf_printf(JsonBuf *b, const char *fmt, ...);
+void json_buf_escape(JsonBuf *b, const char *s);
+
 #endif // OBY_LSP_JSON_H

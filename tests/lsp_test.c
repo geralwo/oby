@@ -5,6 +5,7 @@
 #include "core/array.h"
 #include "core/version.h"
 #include "lsp/json.h"
+#include "lsp/query.h"
 #include "lsp/server.h"
 #include "lsp/uri.h"
 
@@ -114,6 +115,9 @@ int main(void) {
              "\"textDocumentSync\":1,\"positionEncoding\":\"utf-16\"},"
              "\"serverInfo\":{\"name\":\"oby\",\"version\":\"%s\"}}}",
              oby_version_str);
+    const char *publish_clean =
+        "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/publishDiagnostics\","
+        "\"params\":{\"uri\":\"file:///tmp/t.oby\",\"diagnostics\":[]}}";
 
     /* ---- the full handshake: documents sync silently, shutdown answers ---- */
     {
@@ -135,14 +139,54 @@ int main(void) {
         Array *frames;
         int status = run_session(&s, &frames);
         check(status == 0, "exit after shutdown is status 0");
-        check(array_length(frames) == 3, "document sync is silent");
+        check(array_length(frames) == 6, "open, change and close each publish once");
         expect_frame(frames, 0, init_expected, "the initialize response");
-        expect_frame(frames, 1, "{\"jsonrpc\":\"2.0\",\"id\":2,\"result\":null}",
+        expect_frame(frames, 1, publish_clean, "opening publishes the clean list");
+        expect_frame(frames, 2, publish_clean, "a change publishes again");
+        expect_frame(frames, 3, publish_clean, "closing clears them");
+        expect_frame(frames, 4, "{\"jsonrpc\":\"2.0\",\"id\":2,\"result\":null}",
                      "shutdown responds null");
-        expect_frame(frames, 2,
+        expect_frame(frames, 5,
                      "{\"jsonrpc\":\"2.0\",\"id\":3,\"error\":{\"code\":-32600,"
                      "\"message\":\"server is shutting down\"}}",
                      "requests after shutdown are refused");
+        free_frames(frames);
+        free(s.data);
+    }
+
+    /* ---- diagnostics: an error appears, a fix clears it ---- */
+    {
+        Session s = {0};
+        const char *publish_clear =
+            "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/publishDiagnostics\","
+            "\"params\":{\"uri\":\"file:///tmp/bad.oby\",\"diagnostics\":[]}}";
+        session_add(&s, init_request);
+        session_add(&s, "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didOpen\",\"params\":"
+                        "{\"textDocument\":{\"uri\":\"file:///tmp/bad.oby\",\"languageId\":\"oby\","
+                        "\"version\":1,\"text\":\"x = nope\\n\"}}}");
+        session_add(&s, "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didChange\",\"params\":"
+                        "{\"textDocument\":{\"uri\":\"file:///tmp/bad.oby\",\"version\":2},"
+                        "\"contentChanges\":[{\"text\":\"x = 1\\n\"}]}}");
+        session_add(&s, "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didClose\",\"params\":"
+                        "{\"textDocument\":{\"uri\":\"file:///tmp/bad.oby\"}}}");
+        session_add(&s, "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"shutdown\"}");
+        session_add(&s, "{\"jsonrpc\":\"2.0\",\"method\":\"exit\"}");
+
+        Array *frames;
+        int status = run_session(&s, &frames);
+        check(status == 0, "the diagnostics session shuts down cleanly");
+        check(array_length(frames) == 5, "diagnostics are published per change");
+        expect_frame(frames, 0, init_expected, "the initialize response");
+        expect_contains(frames, 1, "\"uri\":\"file:///tmp/bad.oby\"",
+                        "the diagnostics name the document");
+        expect_contains(frames, 1, "\"range\":{\"start\":{\"line\":0,\"character\":4},"
+                                   "\"end\":{\"line\":0,\"character\":8}}",
+                        "the range covers the token");
+        expect_contains(frames, 1, "\"severity\":1", "the severity is error");
+        expect_contains(frames, 1, "\"source\":\"oby\"", "the source is oby");
+        expect_contains(frames, 1, "unknown name 'nope'", "the message survives");
+        expect_frame(frames, 2, publish_clear, "a fix clears the diagnostics");
+        expect_frame(frames, 3, publish_clear, "closing clears them too");
         free_frames(frames);
         free(s.data);
     }
@@ -289,6 +333,45 @@ int main(void) {
         check(path_to_uri("/tmp/a b.oby", path, sizeof path) &&
               strcmp(path, "file:///tmp/a%20b.oby") == 0, "a path becomes a URI");
         arena_free(&arena);
+    }
+
+    /* ---- position conversion, both encodings ---- */
+    {
+        /* A 2-byte, 1-unit character: byte and unit columns diverge after it
+           (`s = "ß"`, with the offset just past the ß). */
+        const char *src = "s = \"\xc3\x9f\"\n";
+        size_t len = strlen(src);
+        LspPosition p = lsp_position_of(src, len, 7, "utf-8");
+        check(p.line == 0 && p.character == 7, "utf-8 counts bytes");
+        p = lsp_position_of(src, len, 7, "utf-16");
+        check(p.line == 0 && p.character == 6, "utf-16 counts code units");
+        check(lsp_offset_of(src, len, p, "utf-16") == 7, "a utf-16 position converts back");
+        p = lsp_position_of(src, len, len, "utf-8");
+        check(p.line == 1 && p.character == 0, "the text's end is the next line");
+
+        /* An emoji is one code point, four bytes, two UTF-16 units. */
+        const char *emoji = "\xf0\x9f\x98\x80";
+        size_t elen = strlen(emoji);
+        p = lsp_position_of(emoji, elen, elen, "utf-16");
+        check(p.line == 0 && p.character == 2, "an emoji is two utf-16 units");
+        p = lsp_position_of(emoji, elen, elen, "utf-8");
+        check(p.line == 0 && p.character == 4, "an emoji is four bytes");
+        LspPosition pair = { 0, 2 };
+        check(lsp_offset_of(emoji, elen, pair, "utf-16") == 4,
+              "an emoji position converts back");
+        LspPosition inside = { 0, 1 };
+        check(lsp_offset_of(emoji, elen, inside, "utf-16") == 0,
+              "a position inside a pair rounds down");
+
+        /* A character past the line's content clamps to its end. */
+        const char *short_line = "ab\n";
+        size_t slen = strlen(short_line);
+        p = lsp_position_of(short_line, slen, 2, "utf-8");
+        check(p.line == 0 && p.character == 2, "a newline clamps to the line's end");
+        LspPosition far = { 0, 9 };
+        check(lsp_offset_of(short_line, slen, far, "utf-8") == 2,
+              "an over-long character clamps");
+        check(lsp_line_start(short_line, slen, 1) == 3, "line starts are found");
     }
 
     if (failures) {

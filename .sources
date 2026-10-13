@@ -21,6 +21,7 @@ src/compiler/codegen.c
 src/lsp/json.c
 src/lsp/uri.c
 src/lsp/server.c
+src/lsp/query.c
 src/native/native.c
 src/native/io.c
 src/native/net.c

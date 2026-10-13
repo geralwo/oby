@@ -4,7 +4,9 @@
 #include <string.h>
 
 #include "core/version.h"
+#include "compiler/frontend.h"
 #include "lsp/json.h"
+#include "lsp/query.h"
 #include "lsp/server.h"
 #include "lsp/uri.h"
 
@@ -23,6 +25,7 @@ typedef struct LspDocument {
     long long version;
     char *source;         /* owned */
     size_t source_len;
+    Frontend fe;          /* the checked program; its diag captures diagnostics */
     struct LspDocument *next;
 } LspDocument;
 
@@ -86,6 +89,7 @@ static LspDocument *doc_find(LspServer *s, const char *uri) {
 }
 
 static void doc_free(LspDocument *doc) {
+    frontend_free(&doc->fe);   /* safe on a zeroed frontend too */
     free(doc->uri);
     free(doc->path);
     free(doc->source);
@@ -103,6 +107,71 @@ static void doc_remove(LspServer *s, const char *uri) {
         }
         link = &(*link)->next;
     }
+}
+
+/* The name this document is checked under: its path when it has one — so
+   relative `use` imports resolve against the right directory — else its URI.
+   Diagnostics recorded against this file belong to this document. */
+static const char *doc_label(LspDocument *doc) {
+    return doc->path ? doc->path : doc->uri;
+}
+
+/* Parse and typecheck the document's text with capture on. The previous run's
+   arena goes first, like the CLI's Frontend cycles. */
+static void doc_check(LspDocument *doc) {
+    frontend_free(&doc->fe);
+    diag_set_capture(&doc->fe.diag, true);
+    char *copy = copy_string(doc->source);
+    if (copy) frontend_run(&doc->fe, doc_label(doc), copy);
+}
+
+/* Publish one document's diagnostics. `doc` NULL publishes the empty list,
+   which is how a closed document's squigglies are cleared. v1 publishes the
+   entry document's own diagnostics only: an imported file — and the embedded
+   prelude — gets its pass when it is opened itself. */
+static void send_diagnostics(LspServer *s, const char *uri, LspDocument *doc) {
+    const char *label = doc ? doc_label(doc) : NULL;
+    Array *entries = doc ? doc->fe.diag.entries : NULL;
+
+    JsonBuf b;
+    json_buf_init(&b);
+    json_buf_printf(&b,
+                    "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/publishDiagnostics\","
+                    "\"params\":{\"uri\":\"");
+    json_buf_escape(&b, uri);
+    json_buf_printf(&b, "\",\"diagnostics\":[");
+
+    bool first = true;
+    for (size_t i = 0; entries && i < array_length(entries); i++) {
+        DiagEntry *e = (DiagEntry *)array_get(entries, i);
+        if (!e->file || strcmp(e->file, label) != 0) continue;
+
+        /* The captured line and column are 1-based byte positions; the
+           protocol wants zero-based positions in the negotiated encoding.
+           Zero-length tokens get a 1-byte span so a caret can render. */
+        size_t start = lsp_line_start(doc->source, doc->source_len, e->line - 1);
+        if (e->column > 0) start += (size_t)(e->column - 1);
+        if (start > doc->source_len) start = doc->source_len;
+        size_t end = start + (e->length > 0 ? e->length : 1);
+        if (end > doc->source_len) end = doc->source_len;
+
+        LspPosition at = lsp_position_of(doc->source, doc->source_len, start, s->encoding);
+        LspPosition to = lsp_position_of(doc->source, doc->source_len, end, s->encoding);
+
+        json_buf_printf(&b,
+                        "%s{\"range\":{\"start\":{\"line\":%d,\"character\":%d},"
+                        "\"end\":{\"line\":%d,\"character\":%d}},"
+                        "\"severity\":%d,\"source\":\"oby\",\"message\":\"",
+                        first ? "" : ",",
+                        at.line, at.character, to.line, to.character, e->severity);
+        json_buf_escape(&b, e->message);
+        json_buf_printf(&b, "\"}");
+        first = false;
+    }
+    json_buf_printf(&b, "]}}");
+
+    if (!b.oom) frame_write(s->out, b.data);
+    json_buf_free(&b);
 }
 
 static void doc_open(LspServer *s, const JsonValue *params) {
@@ -138,6 +207,9 @@ static void doc_open(LspServer *s, const JsonValue *params) {
 
     doc->next = s->docs;
     s->docs = doc;
+
+    doc_check(doc);
+    send_diagnostics(s, doc->uri, doc);
 }
 
 static void doc_change(LspServer *s, const JsonValue *params) {
@@ -171,14 +243,19 @@ static void doc_change(LspServer *s, const JsonValue *params) {
     long long version = doc->version;
     json_int(json_get(td, "version"), &version);
     doc->version = version;
+
+    doc_check(doc);
+    send_diagnostics(s, doc->uri, doc);
 }
 
 static void doc_close(LspServer *s, const JsonValue *params) {
     const JsonValue *td = json_get(params, "textDocument");
     const char *uri = json_string(json_get(td, "uri"));
-    if (uri) doc_remove(s, uri);
-    /* Phase 1b publishes an empty diagnostics list here: clearing on close is
-       the spec's rule for a single-file language. */
+    if (!uri) return;
+    /* Clearing on close is the spec's rule for a single-file language: with
+       the buffer gone the disk file is the truth, and it may differ. */
+    send_diagnostics(s, uri, NULL);
+    doc_remove(s, uri);
 }
 
 /* ------------------------------------------------------------------ */
