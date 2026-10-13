@@ -20,7 +20,7 @@
  *                                                    fill buf or stop at EOF
  *   io_read_string(int fd, int count) -> String      the same, into a String
  *   io_read_bytes(int fd, int count) -> byte[]       the same, as raw bytes
- *   io_read_line(int fd) -> String                   null at end of file
+ *   io_read_line(int fd) -> String                   one line with its newline
  *   io_read_char(int fd) -> int                      -1 at end of file
  *   io_read_all(int fd) -> String
  *   write(int fd, byte[] buf, int count) -> int
@@ -169,6 +169,25 @@ void io_out_write(const char *buf, size_t n) {
     memcpy(g_out + g_out_len, buf, n);
     g_out_len += n;
     if (g_out_line_buffered && memchr(buf, '\n', n)) io_out_flush();
+}
+
+/* io_print(String s) -> void : append to the buffered stdout (what `print`,
+   `io::print` and `Terminal::print` all are). */
+static Value nat_print(Value *args, int argc) {
+    (void)argc;
+    if (args[0].tag == VAL_STRING) {
+        const String *s = args[0].as.str;
+        io_out_write(s->data, s->length);
+    }
+    return val_null();
+}
+
+/* io_flush() -> void : make everything `print` has buffered visible now. */
+static Value nat_flush(Value *args, int argc) {
+    (void)args;
+    (void)argc;
+    io_out_flush();
+    return val_null();
 }
 
 /* ------------------------------------------------------------------ */
@@ -355,8 +374,10 @@ static Value nat_read_bytes(Value *args, int argc) {
     return v;
 }
 
-/* io_read_line(int fd) -> String : one line without its newline; null at end
-   of file (an empty line is ""). */
+/* io_read_line(int fd) -> String : one line including its newline, which is
+   what `write` would give back; null at end of file (a last line without a
+   newline comes back without one). Line endings are not interpreted here —
+   `String::lines` splits text, `String::chomp` strips one ending. */
 static Value nat_read_line(Value *args, int argc) {
     (void)argc;
     int fd = (int)args[0].as.i;
@@ -381,7 +402,9 @@ static Value nat_read_line(Value *args, int argc) {
             }
             size_t i = rb->pos;
             while (i < rb->len && rb->buf[i] != '\n') i++;
-            if (buf_append(&line, &len, &cap, rb->buf + rb->pos, i - rb->pos) != 0) {
+            size_t take = i - rb->pos;
+            if (i < rb->len) take++;   /* the newline is part of the line */
+            if (buf_append(&line, &len, &cap, rb->buf + rb->pos, take) != 0) {
                 free(line);
                 return val_null();
             }
@@ -399,18 +422,17 @@ static Value nat_read_line(Value *args, int argc) {
                 eof = 1;
                 break;
             }
-            if (c == '\n') break;
             if (buf_append(&line, &len, &cap, &c, 1) != 0) {
                 free(line);
                 return val_null();
             }
+            if (c == '\n') break;
         }
     }
     if (len == 0 && eof) {
         free(line);
         return val_null();
     }
-    if (len > 0 && line[len - 1] == '\r') len--;
     String *s = string_new_len(line, len);
     free(line);
     return s ? val_string(s) : val_null();
@@ -761,4 +783,6 @@ void io_register_natives(void) {
     native_add("io_getenv", nat_getenv);
     native_add("io_last_error", nat_last_error);
     native_add("io_args", nat_args);
+    native_add("io_print", nat_print);
+    native_add("io_flush", nat_flush);
 }

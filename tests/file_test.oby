@@ -57,7 +57,7 @@ check(read_file(app) == "x")
 // Lines, characters, and plain reads share one buffered handle, so `tell`
 // accounts for what has been read ahead.
 m = File::open_read(path)
-check(m.read_line() == "one")
+check(m.read_line() == "one\n")
 check(m.tell() == 4)
 check(m.read_char() == 't')
 check(m.tell() == 5)
@@ -66,10 +66,10 @@ check(m.read_line() == null)
 check(m.read_char() == -1)
 check(m.seek(0, io::Seek::SET) == 0)
 check(m.tell() == 0)
-check(m.read_line() == "one")
+check(m.read_line() == "one\n")
 check(m.seek(-3, io::Seek::END) == 5)
 check(m.read(2) == "wo")
-check(m.read_line() == "")
+check(m.read_line() == "\n")
 m.close()
 
 // A closed handle errors instead of reading.

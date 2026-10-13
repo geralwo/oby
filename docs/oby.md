@@ -1107,8 +1107,8 @@ bytes) and `length` (`int`). `String.oby` adds `slice`, `from_bytes`,
 `trim_end`, `is_blank`).
 
 Output: `print` and the `Terminal` helpers write through one buffered stdout,
-flushed at exit, before input, and by `Terminal::flush()`; `io::write` stays a
-raw `write(2)`.
+flushed at exit, before input, and by `io::flush()` (with `Terminal::flush()` as
+an alias); `io::write` stays a raw `write(2)`.
 
 The rest of the prelude (see `prelude.md`):
 

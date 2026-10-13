@@ -1,4 +1,6 @@
-// CRLF line endings: `read_line` strips the \r, while the raw bytes keep it.
+// Line endings. `read_line` returns the exact bytes of a line — CRLF text keeps
+// its `\r`, so `read_line` -> `write` round-trips — and turning bytes into text
+// lines is `String::lines`'s job. `String::chomp` drops one ending.
 
 check = (int cond) {
 	print(int::to_str(1 / cond))
@@ -8,13 +10,26 @@ path = "build/crlf_test.txt"
 write_file(path, "one\r\ntwo\r\n")
 
 f = File::open_read(path)
-check(f.read_line() == "one")
-check(f.read_line() == "two")
+check(f.read_line() == "one\r\n")
+check(f.read_line() == "two\r\n")
 check(f.read_line() == null)
 f.close()
 
-// The carriage return is part of the bytes; only the line reader strips it.
+// The reader and the raw bytes agree, because nothing interprets them.
 all = read_file(path)
 check(all.length == 10)
 check(all.buffer[3] == '\r')
+
+// Splitting into text lines is where CRLF is handled.
+check(all.lines().length == 2)
+check(all.lines()[0] == "one")
+check(all.lines()[1] == "two")
+
+// `chomp` drops one ending, LF or CRLF, and nothing else.
+check("one\r\n".chomp() == "one")
+check("one\n".chomp() == "one")
+check("one".chomp() == "one")
+check("one \n".chomp() == "one ")
+check("".chomp() == "")
+
 print("ok\n")

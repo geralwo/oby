@@ -49,9 +49,13 @@ use "Map.oby"
 use "Pair.oby"
 use "Set.oby"
 
-// The same buffered write as `Terminal::print`; `Terminal::flush` makes it
-// visible immediately.
-print = extern term_print(String s) -> void
+// The buffered write to stdout, the one `io` owns; `io::flush` makes it
+// visible immediately. `Terminal::print` is an alias.
+print = extern io_print(String s) -> void
+echo = (String s) -> void {
+	print(s)
+	io::flush()
+}
 
 // The command line the program was run with, as the process saw it: `args()[0]`
 // is how the binary was invoked (`./build/oby`, or the executable when bundled),

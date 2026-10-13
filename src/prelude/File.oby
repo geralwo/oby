@@ -53,8 +53,8 @@ File::read_bytes = (File f, int count) -> byte[] {
 	return io::read_bytes(f.fd, count)
 }
 
-// One line without its newline; `null` at the end of the file (`""` is an
-// empty line).
+// One line including its newline, so `write` gives it back unchanged; `null` at
+// the end of the file. `String::chomp` drops the ending.
 File::read_line = (File f) -> String {
 	return io::read_line(f.fd)
 }

@@ -117,3 +117,10 @@ check("a\n\nb".lines().length == 3)
 last = "a\n\n".lines()
 check(last.length == 2)
 check(last[1] == "")
+
+// `chomp` drops one line ending and nothing else.
+check("one\r\n".chomp() == "one")
+check("one\n".chomp() == "one")
+check("one".chomp() == "one")
+check("one \n".chomp() == "one ")
+check("".chomp() == "")

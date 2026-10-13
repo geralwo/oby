@@ -200,6 +200,19 @@ String::join = (String[] parts, String sep) -> String {
 	return out
 }
 
+// `s` without one line ending: a trailing `\n`, and a `\r` before it (so LF
+// and CRLF lines both work). Nothing else is touched — `trim` would also eat
+// meaningful spaces. What `read_line` leaves on.
+String::chomp = (String s) -> String {
+	if s.ends_with("\n") == 0 {
+		return s
+	}
+	if s.length >= 2 and s.buffer[s.length - 2] == '\r' {
+		return s.slice(0, s.length - 2)
+	}
+	return s.slice(0, s.length - 1)
+}
+
 // The lines of `s`: split on `\n`, with a trailing `\r` dropped from each line
 // (LF and CRLF text give the same lines), and a final newline not counting as
 // an empty last line. Empty text has no lines.

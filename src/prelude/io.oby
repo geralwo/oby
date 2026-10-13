@@ -44,9 +44,20 @@ io::read_string = extern io_read_string(int fd, int count) -> String
 io::read_bytes  = extern io_read_bytes(int fd, int count) -> byte[]
 io::write       = extern write(int fd, byte[] buf, int count) -> int
 
-// Readers. `read_line` gives the line without its newline, `null` at the end
-// of the file (an empty line is `""`); `read_char` gives one byte or `-1` at
-// the end of the file. They share one read buffer per handle with `read`.
+// The buffered stdout write: `print` (top level) and `Terminal::print` are
+// aliases. The buffer and its line-flushing policy live here, so this is the
+// name to use; `io::write` stays the raw `write(2)`.
+io::print = extern io_print(String s) -> void
+
+// Make everything `print` has buffered visible now. The buffer belongs to io,
+// so this is the name to use; `Terminal::flush` is an alias for it.
+io::flush = extern io_flush() -> void
+
+// Readers. `read_line` gives the line *including* its newline — the raw bytes,
+// so `write` gives them back unchanged — and `null` at the end of the file;
+// `read_char` gives one byte or `-1` at the end. Interpreting line endings is
+// `String::lines`/`String::chomp`'s business, not io's. They share one read
+// buffer per handle with `read`.
 io::read_line = extern io_read_line(int fd) -> String
 io::read_char = extern io_read_char(int fd) -> int
 io::read_all  = extern io_read_all(int fd) -> String

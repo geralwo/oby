@@ -8,16 +8,16 @@ Socket peer = srv.accept()
 print("accepted: ${peer.is_open()}\n")
 
 cli.write("ping\n")
-print("echo: ${peer.read_line()}\n")
+print("echo: ${peer.read_line()}")
 peer.write("pong\n")
-print("back: ${cli.read_line()}\n")
+print("back: ${cli.read_line()}")
 
 // `poll` says when a socket is readable, so a game loop need not block.
 cli.set_nonblocking(1)
 print("poll (idle): ${cli.poll(0)}\n")
 peer.write("late\n")
 print("poll (data): ${cli.poll(1000)}\n")
-print("late: ${cli.read_line()}\n")
+print("late: ${cli.read_line()}")
 
 print("resolve: ${Socket::resolve("127.0.0.1")}\n")
 

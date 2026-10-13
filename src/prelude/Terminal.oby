@@ -40,11 +40,17 @@ Terminal::Color = enum {
 
 // Buffered output: lines and cells accumulate in one buffer, so a redraw costs
 // a copy instead of a syscall per cell. It is flushed when full, on a newline
-// when stdout is a terminal, before reading input, and at exit; `Terminal::flush`
+// when stdout is a terminal, before reading input, and at exit; `io::flush`
 // makes it visible now. `io::write` is the raw escape hatch and flushes this
 // buffer first, so order is kept when the two are mixed.
-Terminal::print = extern term_print(String s) -> void
-Terminal::flush = extern term_flush() -> void
+// An alias for `io::print`, like `Terminal::flush` is for `io::flush`; it is
+// what the escape helpers below write through.
+Terminal::print = extern io_print(String s) -> void
+
+// An alias for `io::flush`: the buffer belongs to io, so that is the name to
+// use. Kept because `Terminal::flush` reads naturally next to the other
+// terminal calls.
+Terminal::flush = () { io::flush() }
 
 Terminal::hide_cursor = () {
 	Terminal::print("\e[?25l")

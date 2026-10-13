@@ -53,7 +53,7 @@ int main(void) {
     check("client written",
           write_file(SCRIPT, "Socket s = Socket::connect(\"127.0.0.1\", args()[2].to_int())\n"
                              "s.write(\"hello\\n\")\n"
-                             "print(\"reply: ${s.read_line()}\\n\")\n"
+                             "print(\"reply: ${s.read_line()}\")\n"
                              "s.close()\n"));
 
     /* A listening socket on an ephemeral port, so the test cannot collide with

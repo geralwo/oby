@@ -23,8 +23,10 @@ print(long)
 print("\n")
 check(long.length == 9000)
 
-// An explicit flush is always safe, mid-line included.
+// An explicit flush is always safe, mid-line included. `Terminal::flush` is
+// an alias, so both spellings are exercised.
 print("d")
+io::flush()
 Terminal::flush()
 print("e\n")
 print("ok\n")

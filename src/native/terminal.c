@@ -16,8 +16,8 @@
  *   term_raw_mode(int on) -> void       keys arrive immediately, no echo
  *   term_mouse_mode(int on) -> void     SGR mouse reporting on/off
  *   term_restore() -> void              undo all of it; also runs at exit
- *   term_print(String s) -> void        append to buffered stdout
- *   term_flush() -> void                make buffered output visible now
+ *   io_print is in io.c: the buffered stdout belongs there
+ *   (the flush is `io_flush`, in io.c: the buffer belongs to io)
  *   term_move_to(int x, int y) -> void
  *   term_set_color(int fg, int bg) -> void
  *   term_width() -> int                 columns, 0 when not a terminal
@@ -128,24 +128,6 @@ static Value nat_height(Value *args, int argc) {
     return val_int(ws.ws_row);
 }
 
-/* term_print(String s) -> void : append to the buffered stdout. */
-static Value nat_print(Value *args, int argc) {
-    (void)argc;
-    if (args[0].tag == VAL_STRING) {
-        const String *s = args[0].as.str;
-        io_out_write(s->data, s->length);
-    }
-    return val_null();
-}
-
-/* term_flush() -> void : make everything buffered visible now. */
-static Value nat_flush(Value *args, int argc) {
-    (void)args;
-    (void)argc;
-    io_out_flush();
-    return val_null();
-}
-
 /* 0-based: move_to(0, 0) is the top-left cell. */
 static Value nat_move_to(Value *args, int argc) {
     (void)argc;
@@ -169,8 +151,6 @@ void terminal_register_natives(void) {
     native_add("term_raw_mode", nat_raw_mode);
     native_add("term_mouse_mode", nat_mouse_mode);
     native_add("term_restore", nat_restore);
-    native_add("term_print", nat_print);
-    native_add("term_flush", nat_flush);
     native_add("term_width", nat_width);
     native_add("term_height", nat_height);
     native_add("term_move_to", nat_move_to);

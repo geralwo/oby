@@ -57,7 +57,7 @@ level rather than behind a namespace: `print`, `args`, `rand`, `read_file`,
 | `uint::to_str(uint) -> String` | unsigned formatting (`extern uint_to_str`) |
 | `uint64::to_str(uint64) -> String` | `extern uint64_to_str` |
 | `int64::to_str(int64) -> String` | `extern int64_to_str` |
-| `print(String)` | buffered write to stdout; `Terminal::flush()` makes it visible |
+| `print(String)` | buffered write to stdout (`io::print`); `io::flush()` makes it visible |
 | `args() -> String[]` | the process's command line: how the binary was invoked, then the script and its arguments (`extern io_args`) |
 
 Crossing signedness is never implicit, so the constructors that do it are
@@ -69,7 +69,7 @@ representation); the prelude only attaches constructors and methods to their
 names. `print` is:
 
 ```
-print = extern term_print(String s) -> void
+print           = extern io_print(String s) -> void
 ```
 
 so it takes a `String`; format other values first (for example with
@@ -78,7 +78,7 @@ so it takes a `String`; format other values first (for example with
 `print` and the terminal escape natives share one **buffered stdout** (a redraw
 costs a copy per cell, not a syscall). The buffer is flushed when it fills, on a
 newline when stdout is a terminal (so prompts appear as typed), before reading
-input, before a raw `io::write` to stdout, and at exit. `Terminal::flush()`
+input, before a raw `io::write` to stdout, and at exit. `io::flush()`
 forces it; `io::write` stays a raw `write(2)`.
 
 ### `io.oby`
@@ -114,9 +114,11 @@ io::read_full   = extern io_read_full(int fd, byte[] buf, int count) -> int
 io::read_string = extern io_read_string(int fd, int count) -> String
 io::read_bytes  = extern io_read_bytes(int fd, int count) -> byte[]
 io::write       = extern write(int fd, byte[] buf, int count) -> int
+io::print       = extern io_print(String s) -> void          // `print` aliases this
 io::read_line   = extern io_read_line(int fd) -> String
 io::read_char   = extern io_read_char(int fd) -> int
 io::read_all    = extern io_read_all(int fd) -> String
+io::flush       = extern io_flush() -> void
 io::seek        = extern io_seek(int fd, int64 offset, io::Seek whence) -> int64
 io::tell        = extern io_tell(int fd) -> int64
 io::size        = extern io_size(String path) -> int64     // also io_size(int fd)
@@ -140,16 +142,18 @@ Semantics worth knowing:
 - `read` is `read(2)`: it may return fewer bytes than asked (a short read is
   normal on pipes). `read_full` fills the buffer and stops only at the end of
   the file; `read_string`/`read_bytes` do the same into a fresh value.
-- `read_line` gives the line without its newline, `null` at the end of the file;
-  `read_char` gives one byte or `-1`. Both share a per-fd buffer with `read`, so
-  they can be mixed on one handle.
+- `read_line` gives the line *including* its newline — the exact bytes, so `write`
+  gives them back unchanged — `null` at the end of the file; `read_char` gives
+  one byte or `-1`. Both share a per-fd buffer with `read`, so they can be mixed
+  on one handle.
 - `seek`/`tell` account for bytes the readers have buffered: `tell` is the
   logical position, not the read-ahead one.
 - `size` takes a path or an open descriptor; `read_dir` returns entry names
   (no `.`/`..`) in readdir order.
-- `write` is a raw `write(2)`. The only buffered stream is stdout (for `print`
-  and `Terminal`); `write`/`read` on stdout/stdin flush it first, so `print`
-  and `io::write` can be mixed safely.
+- `write` is a raw `write(2)`. The only buffered stream is stdout: `io::print`
+  (which `print` and `Terminal::print` alias) appends to it, and `io::flush`
+  makes it visible now. `write`/`read` on stdout/stdin flush it first, so
+  `print` and `io::write` can be mixed safely.
 
 ### `String.oby`
 
@@ -171,6 +175,7 @@ Methods on the built-in `String` (call them as `s.slice(1, 3)`):
 | `String::replace(String, String from, String to) -> String` | every occurrence of `from`, left to right |
 | `String::join(String[] parts, String sep) -> String` | the parts joined with `sep` |
 | `String::lines(String) -> String[]` | split on `\n`; drops `\r` (CRLF), no empty last line |
+| `String::chomp(String) -> String` | without one trailing line ending (`\n`, or `\r\n`); nothing else is touched |
 
 ```
 s = "hello, world"
@@ -208,7 +213,7 @@ closed `File` (`fd == -1`) rather than an error, and `read_file` gives `null`.
 | `File::is_open(File) -> int` | `1` while the descriptor is valid |
 | `File::read(File, int count) -> String` | fills to `count` or the end of the file; `""` at end of file, `null` on error |
 | `File::read_bytes(File, int count) -> byte[]` | the same read, as raw bytes; `null` at end of file |
-| `File::read_line(File) -> String` | one line without its newline; `null` at end of file |
+| `File::read_line(File) -> String` | one line including its newline; `null` at end of file (`String::chomp` drops the ending) |
 | `File::read_char(File) -> int` | one byte; `-1` at end of file |
 | `File::read_all(File) -> String` | the rest of the file |
 | `File::write(File, String) -> int` / `::write_line(File, String) -> int` | bytes written |
@@ -282,8 +287,8 @@ The standard descriptors live on `io` (`io::stdin`, `io::stdout`,
 | `Terminal::set_color(int fg, int bg)` | set the SGR colours (codes from `fg_code`/`bg_code`) |
 | `Terminal::hide_cursor()` / `::show_cursor()` | |
 | `Terminal::Color` | an enum: `DEFAULT = -1`, then `BLACK` … `LIGHTWHITE` numbered from `0` |
-| `Terminal::print(String)` | write to stdout (buffered; see `Terminal::flush`) |
-| `Terminal::flush()` | make everything buffered visible now |
+| `Terminal::print(String)` | an alias for `io::print` (buffered; see `io::flush`) |
+| `Terminal::flush()` | an alias for `io::flush()` |
 | `Terminal::fg_code(Color) -> int` / `bg_code(Color) -> int` | ANSI SGR codes |
 | `Terminal::printc(String, Color fg, Color bg)` | print with colors |
 | `Terminal::print_at(int x, int y, String)` | move the cursor and print |
@@ -469,6 +474,8 @@ the held state, `mouse_dragged` is motion while a button is held, and
 | `io_rmdir` | `(String path) -> int` | `src/native/io.c` |
 | `io_read_dir` | `(String path) -> String[]` | `src/native/io.c` |
 | `io_cwd` | `() -> String` | `src/native/io.c` |
+| `io_args` | `() -> String[]` | `src/native/io.c` |
+| `io_flush` | `() -> void` | `src/native/io.c` |
 | `io_getenv` | `(String name) -> String` | `src/native/io.c` |
 | `io_last_error` | `() -> int` | `src/native/io.c` |
 | `int_to_str` | `(int) -> String` | `src/core/numbers.c` |
@@ -491,8 +498,7 @@ the held state, `mouse_dragged` is motion while a button is held, and
 | `term_raw_mode` | `(int) -> void` | `src/native/terminal.c` |
 | `term_mouse_mode` | `(int) -> void` | `src/native/terminal.c` |
 | `term_restore` | `() -> void` | `src/native/terminal.c` |
-| `term_print` | `(String s) -> void` | `src/native/terminal.c` |
-| `term_flush` | `() -> void` | `src/native/terminal.c` |
+| `io_print` | `(String s) -> void` | `src/native/io.c` |
 | `term_width`, `term_height` | `() -> int` | `src/native/terminal.c` |
 | `input_poll` | `() -> int` | `src/native/input.c` |
 | `input_wait` | `(int timeout_ms) -> int` | `src/native/input.c` |

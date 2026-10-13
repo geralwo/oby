@@ -78,7 +78,7 @@ Socket::read_bytes = (Socket s, int count) -> byte[] {
 	return io::read_bytes(s.fd, count)
 }
 
-// One line without its newline; `null` at the end of the stream.
+// One line including its newline; `null` at the end of the stream.
 Socket::read_line = (Socket s) -> String {
 	return io::read_line(s.fd)
 }
