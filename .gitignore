@@ -7,6 +7,3 @@ plans/
 
 # Everything else that is `.oby` stays untracked — `examples/` and scratch
 # scripts are working space, not repository content.
-
-# The Zed stub extension's wasm is fetched, not committed (editors/zed/README.md).
-editors/zed/lspaddon/extension.wasm

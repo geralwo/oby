@@ -32,6 +32,30 @@ done
 A file named `*_error.oby` is *meant* to be broken — those are the compiler's
 negative tests — so errors there are expected. Everything else should be clean.
 
+## Compiling it for Zed
+
+Zed loads the grammar as a wasm module, and for an extension placed in
+`extensions/installed/` by hand it never builds one — so
+`editors/zed/lspaddon/grammars/oby.wasm` is committed. It goes stale when
+`grammar.js` changes, and that is a two-command fix:
+
+```sh
+npx tree-sitter generate
+```
+
+```powershell
+# Zed downloads this toolchain itself the first time it builds a grammar; any
+# clang with a wasm32 target will do. The flags are Zed's own.
+$sdk = "$env:LOCALAPPDATA\Zed\extensions\build\wasi-sdk"
+& "$sdk\bin\clang.exe" -fPIC -shared -Os `
+    -Wl,--export=tree_sitter_oby `
+    -o editors\zed\lspaddon\grammars\oby.wasm `
+    -I editors\tree-sitter-oby\src `
+    editors\tree-sitter-oby\src\parser.c
+```
+
+Then re-run `editors/zed/install.ps1`, which copies the blob into place.
+
 ## What the grammar does not do
 
 Two rules here are stricter than the compiler, both because a parser without

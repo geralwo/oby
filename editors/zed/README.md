@@ -33,18 +33,25 @@ highlighting, bracket matching and an outline.
 bash compile.sh          # -> build/oby
 ```
 
-## Step 2 — fetch the stub wasm
+## Step 2 — copy the addon into Zed
 
-`editors/zed/lspaddon/extension.wasm` isn't committed. Grab the unmodified stub
-from <https://github.com/zhcn000000/zed-customlsp> (sha256
-`ec9df651072fcf8e57e9ddeeaac1d4eef2f31a8ac78339493798f5378bfa3914`):
+`editors/zed/lspaddon/` is ready to copy as it stands:
 
-```sh
-curl -fL -o editors/zed/lspaddon/extension.wasm \
-  https://raw.githubusercontent.com/zhcn000000/zed-customlsp/master/extension.wasm
-```
+| file | what it is |
+| ---- | ---------- |
+| `extension.toml` | the manifest: the grammar, and the server name |
+| `languages/oby/config.toml` | `Oby` = `*.oby`, with grammar `oby` |
+| `extension.wasm` | the stub that registers the server name (sha256 `ec9df651072fcf8e57e9ddeeaac1d4eef2f31a8ac78339493798f5378bfa3914`) |
+| `grammars/oby.wasm` | the compiled grammar, built from this repository |
 
-## Step 3 — copy the addon into Zed
+Both blobs are committed and nothing is built or fetched at install time. That
+is deliberate: a folder dropped into `extensions/installed/` is treated as
+**prebuilt**, so Zed will not compile a grammar for it — it looks for
+`grammars/<name>.wasm` and, when it is missing, fails to load the language
+altogether (the server goes quiet too, not just the colours).
+
+Rebuilding the grammar after changing it is a two-command job, in
+`editors/tree-sitter-oby/README.md`.
 
 Zed only looks in its own extensions folder:
 
@@ -76,6 +83,7 @@ Afterwards you should have:
 %LOCALAPPDATA%\Zed\extensions\installed\lspaddon\
 ├── extension.toml
 ├── extension.wasm
+├── grammars\oby.wasm
 └── languages\oby\config.toml
 ```
 
@@ -146,18 +154,12 @@ holds `core.oby`, and you fall back to the embedded copy.
 - **The addon doesn't show up in `zed: extensions`** — Zed also keeps a registry
   in `extensions/index.json`. We haven't needed to touch it, but that's the next
   place to look.
-- **Zed refuses the grammar-less `Oby` language** — Zed's docs say a language in
-  an extension needs a tree-sitter grammar. Fall back to a carrier language:
-  uncomment the variant at the bottom of `lspaddon/extension.toml` (attach `oby`
-  to a language you never open, e.g. Starlark) and add to settings:
-
-  ```json
-  "file_types": { "Starlark": ["oby"] },
-  "languages": { "Starlark": { "language_servers": ["oby"] } }
-  ```
-
-  Downside: the server also starts for every file of that language, and `.oby`
-  files get its highlighting. A stopgap, not the destination.
+- **`failed to load language Oby: The system cannot find the path specified`**
+  in `zed: open log` — `grammars\oby.wasm` is missing from the installed addon.
+  Zed does not compile a grammar for an extension it treats as prebuilt, and it
+  drops the whole language when the blob is not there, which takes the server
+  down with it. The copy in this repository has the blob; rebuilding it after a
+  grammar change is the recipe in `editors/tree-sitter-oby/README.md`.
 
 ## The other routes
 
@@ -168,8 +170,13 @@ toolchain with the `wasm32-wasip1` target — nothing on this machine has Rust
 today, so it isn't written. Worth it only if we stop reusing the stub, and it
 is now the *only* thing left that the stub provides (the grammar is ours).
 
-**A grammar repository of its own.** The grammar sits in this repository and
-`extension.toml` reaches it with `path`, which is what a remote for `oby` alone
-buys. Its own `tree-sitter-oby` repository would instead be what lets Neovim and
-Helix use the grammar, since they fetch one by repository without a `path` — and
-it would keep the committed `src/parser.c` out of this repository's history.
+**A grammar repository of its own.** The grammar sits in this repository and can
+be reached with `path`, which is what a remote for `oby` alone buys. Worth
+knowing, though: for an extension placed in `extensions/installed/` by hand, Zed
+never fetches it — `repository`, `path` and `rev` are inert there, and the
+committed `grammars/oby.wasm` is what actually loads. They matter once the
+extension is published and Zed downloads it as a built artifact.
+
+A `tree-sitter-oby` repository of its own is what would let Neovim and Helix use
+the grammar, since they fetch one by repository without a `path` — and it would
+keep the committed `src/parser.c` out of this repository's history.

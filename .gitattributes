@@ -7,3 +7,8 @@
 # Vendored code is kept byte-exact: vendor/README.md records a sha256, and a
 # checkout must not rewrite the bytes it pins.
 vendor/** -text
+
+# A wasm blob is loaded as-is, so it is never rewritten in transit either:
+# editors/zed/lspaddon/ carries the extension and its compiled grammar, and
+# the stub records what it hashes to.
+*.wasm -text

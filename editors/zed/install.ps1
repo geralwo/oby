@@ -35,10 +35,13 @@ if (-not (Test-Path -LiteralPath $source)) {
     exit 1
 }
 
-# extension.wasm is fetched rather than committed, so a fresh clone lacks it.
-if (-not (Test-Path -LiteralPath (Join-Path $source "extension.wasm"))) {
-    Write-Error "lspaddon\extension.wasm is missing -- fetch it first (see README.md)"
-    exit 1
+# Both blobs are committed and are exactly what Zed loads; a copy without them
+# installs an extension whose language cannot load.
+foreach ($blob in @("extension.wasm", "grammars\oby.wasm")) {
+    if (-not (Test-Path -LiteralPath (Join-Path $source $blob))) {
+        Write-Error "lspaddon\$blob is missing -- is this checkout complete?"
+        exit 1
+    }
 }
 
 # Copy-Item -Recurse nests into an existing folder rather than replacing it, so
