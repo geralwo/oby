@@ -1,0 +1,5 @@
+# Line endings are repository policy, not per-machine config: LF in the
+# repository, native endings in the working tree. The same files are then
+# "clean" for git on Windows and for git under WSL alike, and the toolchain
+# tolerates either form (the lexer skips \r; the test harness folds CRLF).
+* text=auto
