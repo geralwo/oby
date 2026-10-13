@@ -54,6 +54,18 @@ Zed only looks in its own extensions folder:
 | Linux | `~/.local/share/zed/extensions/installed/` |
 | macOS | `~/Library/Application Support/Zed/extensions/installed/` |
 
+On Windows, `install.ps1` next to this file does the copy. It replaces a
+previous install rather than nesting inside it, which is what `Copy-Item
+-Recurse` does once the folder exists:
+
+```powershell
+.\editors\zed\install.ps1
+# or, when the execution policy refuses the script:
+powershell -ExecutionPolicy Bypass -File editors\zed\install.ps1
+```
+
+Elsewhere it is a plain copy:
+
 ```sh
 cp -r editors/zed/lspaddon "$LOCALAPPDATA/Zed/extensions/installed/"
 ```
